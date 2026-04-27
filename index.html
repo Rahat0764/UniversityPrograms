@@ -305,7 +305,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
 
-    /* ─── Helpers ─────────────────────────────────────────────────────── */
     const parseRank = (rank) => {
       if (!rank || rank.toString().toUpperCase() === 'N/A') return Infinity;
       const match = rank.toString().match(/\d+/);
@@ -321,20 +320,11 @@
       return dv;
     }
 
-    // External API removed — suggestions come only from QS database
-
-    /* ─── QS CSV Lookup ───────────────────────────────────────────────── */
-    // qsDb: { "university name lowercase": "rank" }
-    // This is loaded from user-uploaded CSV
-
     const parseQSCsv = (text) => {
       const lines = text.split('\n').filter(l => l.trim());
       if (lines.length < 2) return {};
       const header = lines[0].toLowerCase();
 
-      // Try to find name and rank columns
-      // Common QS CSV formats:
-      // "Institution","2025 Rank"  OR  "University","Rank"  OR  "institution_name","rank"
       const cols = lines[0].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g,'').trim().toLowerCase());
       
       let nameIdx = -1, rankIdx = -1;
@@ -571,7 +561,7 @@
       }, [debouncedSearch, showSuggestions, qsDb]);
 
       /* ── QS Auto-fetch ────────────────────────────────────────────── */
-      const QS_CDN_URL = '/data/qsdata.xlsx';
+      const QS_PATH = '/data/qsdata.xlsx';
 
       // CORS proxy list — tried in order until one succeeds
       const CORS_PROXIES = [
@@ -647,8 +637,8 @@
         const loadQS = async () => {
           // Build ordered URL list: direct first, then proxies
           const urls = [
-            QS_CDN_URL,
-            ...CORS_PROXIES.map(p => p(QS_CDN_URL))
+            QS_PATH,
+            ...CORS_PROXIES.map(p => p(QS_PATH))
           ];
 
           let lastErr = null;
