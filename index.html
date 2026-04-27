@@ -490,11 +490,14 @@
 
         const term = debouncedSearch.toLowerCase().trim();
         const results = [];
-        for (const [key, rank] of Object.entries(qsDb)) {
+        for (const [key, entry] of Object.entries(qsDb)) {
           if (key.includes(term)) {
-            // Restore proper casing: capitalize each word
-            const displayName = key.replace(/\b\w/g, c => c.toUpperCase());
-            results.push({ name: displayName, _qsKey: key, _qsRank: rank });
+            results.push({
+              name: entry.originalName || key,
+              _qsKey: key,
+              _qsRank: entry.rank || entry,
+              _qsCountry: entry.country || '',
+            });
             if (results.length >= 8) break;
           }
         }
@@ -548,11 +551,21 @@
         return db;
       };
 
-      // Auto-fetch on mount
+
+      /* ── Helpers ───────────────────────────────────────────────────── */
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      // Auto-fetch QS data on mount — runs after showToast is defined
       useEffect(() => {
         setQsLoading(true);
         fetch(QS_CDN_URL)
-          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+          .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.arrayBuffer();
+          })
           .then(buf => {
             const db = parseQSXlsx(buf);
             const count = Object.keys(db).length;
@@ -561,15 +574,11 @@
             setQsDbMeta({ count, loadedAt: new Date().toLocaleDateString() });
             setQsError(false);
           })
-          .catch(() => setQsError(true))
+          .catch(() => {
+            setQsError(true);
+          })
           .finally(() => setQsLoading(false));
       }, []);
-
-      /* ── Helpers ───────────────────────────────────────────────────── */
-      const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4000);
-      };
 
       const extractDomain = (url) => {
         if (!url) return null;
