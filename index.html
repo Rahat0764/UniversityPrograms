@@ -3,62 +3,234 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Premium Study Tracker - Secure Cloud Sync</title>
+  <title>StudyTrack — University Preference Manager</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+    :root {
+      --accent: #5b4fff;
+      --accent-light: #ede9ff;
+      --accent-mid: #7c6fff;
+      --surface: #ffffff;
+      --surface-2: #f7f6ff;
+      --border: #e8e5f5;
+      --text: #1a1730;
+      --text-2: #6b6888;
+      --success: #059669;
+      --danger: #dc2626;
+      --gold: #d97706;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f3f1ff;
+      background-image: radial-gradient(ellipse at 20% 0%, rgba(91,79,255,0.08) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 100%, rgba(91,79,255,0.05) 0%, transparent 50%);
+      min-height: 100vh;
+      color: var(--text);
+    }
+
+    h1,h2,h3,h4 { font-family: 'Bricolage Grotesque', sans-serif; }
 
     @media print {
-      body { background-color: white !important; }
+      body { background: white !important; background-image: none !important; }
       .print-hidden { display: none !important; }
       .print-card {
         box-shadow: none !important;
-        border-bottom: 1px solid #e2e8f0 !important;
-        border-radius: 0 !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
         break-inside: avoid;
-        margin-bottom: 20px;
-        padding: 10px 0 !important;
+        margin-bottom: 16px;
       }
     }
 
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    ::-webkit-scrollbar-thumb { background: #c4bfed; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-    .glass-effect {
-      background: rgba(255,255,255,0.90);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+    .glass {
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
     }
 
-    .loader {
-      border: 2px solid #e2e8f0;
-      border-top: 2px solid #4f46e5;
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .card:hover { border-color: #c5bef5; box-shadow: 0 8px 32px rgba(91,79,255,0.08); }
+
+    .input-field {
+      width: 100%;
+      padding: 13px 16px;
+      background: var(--surface-2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.18s;
+    }
+    .input-field:focus {
+      background: white;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(91,79,255,0.12);
+    }
+    .input-field::placeholder { color: #b0adc8; font-weight: 400; }
+
+    select.input-field { cursor: pointer; }
+
+    .label {
+      display: block;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+      margin-bottom: 8px;
+      font-family: 'Bricolage Grotesque', sans-serif;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700;
+      border-radius: 12px;
+      padding: 13px 24px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.18s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+    .btn-primary:hover { background: var(--accent-mid); box-shadow: 0 4px 16px rgba(91,79,255,0.3); transform: translateY(-1px); }
+    .btn-primary:active { transform: scale(0.97); }
+
+    .btn-ghost {
+      background: white;
+      color: var(--text-2);
+      font-weight: 600;
+      border-radius: 12px;
+      padding: 10px 18px;
+      cursor: pointer;
+      border: 1.5px solid var(--border);
+      transition: all 0.18s;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+    .spinner {
+      width: 15px; height: 15px;
+      border: 2px solid rgba(91,79,255,0.25);
+      border-top-color: var(--accent);
       border-radius: 50%;
-      width: 16px; height: 16px;
-      animation: spin 1s linear infinite;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
     }
-    @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ✅ FIX: label-as-button needs pointer cursor */
-    label.btn-label { cursor: pointer; }
+    .rank-badge {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 8px;
+    }
+
+    .rank-num { background: #fff8e6; color: var(--gold); border: 1px solid #fde68a; }
+    .rank-na  { background: #f3f4f6; color: #9ca3af; border: 1px solid #e5e7eb; }
+
+    .icon-btn {
+      width: 34px; height: 34px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: white;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.18s;
+      color: var(--text-2);
+    }
+    .icon-btn:hover { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+    .icon-btn.danger:hover { border-color: #fca5a5; background: #fff1f2; color: var(--danger); }
+    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+    .univ-clear-btn {
+      position: absolute; right: 12px; top: 50%;
+      transform: translateY(-50%);
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #e0dcf5;
+      border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-2);
+    }
+    .univ-clear-btn:hover { background: var(--accent); color: white; }
+
+    .toast-enter { animation: toastIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translate(-50%, -20px) scale(0.9); }
+      to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+
+    .prog-card-enter { animation: cardIn 0.35s cubic-bezier(0.34,1.26,0.64,1) both; }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .suggestion-item {
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border-bottom: 1px solid #f5f3ff;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: var(--surface-2); }
+
+    .num-badge {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800;
+      width: 44px; height: 44px;
+      border-radius: 14px;
+      background: var(--accent);
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(91,79,255,0.3);
+    }
   </style>
 </head>
-<body class="text-slate-800 antialiased selection:bg-indigo-200 selection:text-indigo-900">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback } = React;
 
-    /* ─── Helpers ──────────────────────────────────────────────────────────── */
+    /* ─── Helpers ─────────────────────────────────────────────────────── */
     const parseRank = (rank) => {
       if (!rank || rank.toString().toUpperCase() === 'N/A') return Infinity;
       const match = rank.toString().match(/\d+/);
@@ -74,24 +246,49 @@
       return dv;
     }
 
-    // ✅ FIX: Module-level cache so the ~5 MB JSON is fetched only ONCE per page load
     let _univCache = null;
 
-    /* ─── App ──────────────────────────────────────────────────────────────── */
-    const App = () => {
+    /* ─── QS Rank Fetch via Anthropic API (web search) ─────────────── */
+    async function fetchQSRankViaAI(univName) {
+      const prompt = `Search for the current QS World University Rankings 2025 or 2026 rank for "${univName}". Reply with ONLY the rank number (e.g. "301" or "451-500"). If not ranked, reply "N/A". No explanation.`;
+      try {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 60,
+            tools: [{ type: "web_search_20250305", name: "web_search" }],
+            messages: [{ role: "user", content: prompt }]
+          })
+        });
+        const data = await response.json();
+        if (!data.content) return null;
+        const textBlock = data.content.find(b => b.type === "text");
+        if (!textBlock) return null;
+        const text = textBlock.text.trim();
+        if (/^n\/a$/i.test(text)) return "N/A";
+        const match = text.match(/\d[\d\-]*/);
+        return match ? match[0] : null;
+      } catch (e) {
+        console.error("AI QS fetch failed:", e);
+        return null;
+      }
+    }
 
-      // ✅ FIX: Wrap JSON.parse in try/catch — corrupted data used to crash the app
+    /* ─── App ─────────────────────────────────────────────────────────── */
+    const App = () => {
       const [preferences, setPreferences] = useState(() => {
         try {
-          const saved = localStorage.getItem('studyTrackerV5');
+          const saved = localStorage.getItem('studyTrackerV6');
           return saved ? JSON.parse(saved) : [];
         } catch {
-          localStorage.removeItem('studyTrackerV5');
+          localStorage.removeItem('studyTrackerV6');
           return [];
         }
       });
 
-      const [formData, setFormData] = useState({
+      const defaultForm = {
         degreeType: 'Bachelor',
         universityName: '',
         qsRanking: '',
@@ -102,27 +299,26 @@
         language: 'English',
         customLanguage: '',
         logoUrl: ''
-      });
+      };
 
-      const [editingId,   setEditingId]   = useState(null);
-      const [editFormData,setEditFormData] = useState({});
+      const [formData, setFormData] = useState(defaultForm);
+      const [editingId,    setEditingId]    = useState(null);
+      const [editFormData, setEditFormData] = useState({});
       const [showSyncModal,setShowSyncModal] = useState(false);
-      const [syncLink,    setSyncLink]    = useState('');
-      const [toast,       setToast]       = useState(null);
-
-      const [suggestions,      setSuggestions]      = useState([]);
-      const [isSearchingUniv,  setIsSearchingUniv]  = useState(false);
-      const [showSuggestions,  setShowSuggestions]  = useState(false);
-      const [isFetchingQS,     setIsFetchingQS]     = useState(false);
+      const [syncLink,     setSyncLink]     = useState('');
+      const [toast,        setToast]        = useState(null);
+      const [suggestions,  setSuggestions]  = useState([]);
+      const [isSearchingUniv, setIsSearchingUniv] = useState(false);
+      const [showSuggestions, setShowSuggestions] = useState(false);
+      const [isFetchingQS,    setIsFetchingQS]    = useState(false);
 
       const suggestionRef = useRef(null);
       const fileInputRef  = useRef(null);
-
       const debouncedSearch = useDebounce(formData.universityName, 500);
 
       /* Auto-save */
       useEffect(() => {
-        localStorage.setItem('studyTrackerV5', JSON.stringify(preferences));
+        localStorage.setItem('studyTrackerV6', JSON.stringify(preferences));
       }, [preferences]);
 
       /* Cloud Sync Restore */
@@ -134,7 +330,7 @@
             const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(syncData));
             if (Array.isArray(decoded)) {
               setPreferences(decoded);
-              showToast('✅ Data restored from Cloud Link successfully!');
+              showToast('✅ Data restored from Cloud Link!');
               window.history.replaceState(null, '', window.location.pathname);
             }
           } catch {
@@ -153,62 +349,53 @@
         return () => document.removeEventListener('mousedown', handler);
       }, []);
 
-      /* ✅ FIX: University search with in-memory cache (no repeated 5 MB downloads) */
+      /* University global search */
       useEffect(() => {
         if (!debouncedSearch || debouncedSearch.length <= 2 || !showSuggestions) {
-          setSuggestions([]);
-          return;
+          setSuggestions([]); return;
         }
         const doSearch = (data) => {
-          const term   = debouncedSearch.toLowerCase();
-          const hits   = data.filter(u => u.name.toLowerCase().includes(term));
+          const term  = debouncedSearch.toLowerCase();
+          const hits  = data.filter(u => u.name.toLowerCase().includes(term));
           const unique = Array.from(new Set(hits.map(a => a.name)))
             .map(name => hits.find(a => a.name === name))
-            .slice(0, 8);
+            .slice(0, 7);
           setSuggestions(unique);
           setIsSearchingUniv(false);
         };
-
-        if (_univCache) {
-          doSearch(_univCache);
-        } else {
-          setIsSearchingUniv(true);
-          fetch('https://raw.githubusercontent.com/Hipo/university-domains-list/master/world_universities_and_domains.json')
-            .then(r => r.json())
-            .then(data => { _univCache = data; doSearch(data); })
-            .catch(err => { console.error(err); setIsSearchingUniv(false); });
-        }
+        if (_univCache) { doSearch(_univCache); return; }
+        setIsSearchingUniv(true);
+        fetch('https://raw.githubusercontent.com/Hipo/university-domains-list/master/world_universities_and_domains.json')
+          .then(r => r.json())
+          .then(data => { _univCache = data; doSearch(data); })
+          .catch(err => { console.error(err); setIsSearchingUniv(false); });
       }, [debouncedSearch, showSuggestions]);
 
-      /* ─── QS Rank fetch ─────────────────────────────────────────────────── */
-      // ✅ FIX: Don't overwrite a rank the user has already typed manually
+      /* QS Rank fetch via AI */
       const fetchLiveQSRank = async (univName) => {
+        if (!univName) return;
         setIsFetchingQS(true);
         try {
-          const response = await fetch(`/api/qs?univ=${encodeURIComponent(univName)}`);
-          const data     = await response.json();
-
-          // ✅ FIX: backend now returns null on failure (not 'N/A'), check accordingly
-          if (data.rank) {
+          const rank = await fetchQSRankViaAI(univName);
+          if (rank) {
             setFormData(prev => {
-              // Only auto-fill if user hasn't typed something themselves
               if (!prev.qsRanking) {
-                showToast(`🎯 QS Rank (${data.rank}) fetched automatically!`);
-                return { ...prev, qsRanking: data.rank };
+                showToast(`🎯 QS Rank (${rank}) fetched automatically!`);
+                return { ...prev, qsRanking: rank };
               }
               return prev;
             });
           } else {
-            showToast('Automatic rank not found. Please input manually.', 'error');
+            showToast('Rank not found. You can enter it manually.', 'warn');
           }
         } catch {
-          showToast('Could not fetch rank. Please input manually.', 'error');
+          showToast('Could not fetch rank. Please enter manually.', 'warn');
         } finally {
           setIsFetchingQS(false);
         }
       };
 
-      /* ─── Helpers ───────────────────────────────────────────────────────── */
+      /* Helpers */
       const showToast = (message, type = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 4000);
@@ -222,7 +409,7 @@
       const sortByRank = (list) =>
         [...list].sort((a, b) => parseRank(a.qsRanking) - parseRank(b.qsRanking));
 
-      /* ─── Form handlers ─────────────────────────────────────────────────── */
+      /* Form handlers */
       const handleAddInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -234,15 +421,16 @@
         setFormData(prev => ({
           ...prev,
           universityName: univ.name,
-          country:   univ.country           || '',
+          country:   univ.country || '',
           cityState: univ['state-province'] || '',
-          qsRanking: '',          // clear so auto-fetch can fill it
+          qsRanking: '',
           logoUrl:   domain ? `https://logo.clearbit.com/${domain}` : ''
         }));
         setShowSuggestions(false);
         fetchLiveQSRank(univ.name);
       };
 
+      /* ✅ FIX: Only clear programName on submit, keep university info */
       const handleAddProgram = (e) => {
         e.preventDefault();
         if (!formData.universityName || !formData.programName) return;
@@ -265,16 +453,25 @@
         };
 
         setPreferences(sortByRank([...preferences, newPref]));
-        setFormData(prev => ({
-          ...prev,
-          programName: '', universityName: '',
-          qsRanking: '', cityState: '', country: '', logoUrl: ''
-        }));
-        showToast('✅ Program added and sorted by ranking!');
+        // ✅ Only clear programName, keep university data for next entry
+        setFormData(prev => ({ ...prev, programName: '' }));
+        showToast('✅ Program added!');
       };
 
-      /* ─── Edit / Delete ─────────────────────────────────────────────────── */
-      // ✅ FIX: Bilingual (Ar+En) is now a recognised standard language in edit mode
+      /* ✅ FIX: Clear university and related fields */
+      const clearUniversityFields = () => {
+        setFormData(prev => ({
+          ...prev,
+          universityName: '',
+          qsRanking: '',
+          cityState: '',
+          country: '',
+          logoUrl: ''
+        }));
+        setSuggestions([]);
+      };
+
+      /* Edit / Delete */
       const STANDARD_LANGS = ['English', 'Arabic', 'Bilingual (Ar+En)'];
 
       const startEditing = (pref) => {
@@ -300,11 +497,10 @@
       };
 
       const handleDelete = (id) => {
-        if (confirm('Are you sure you want to remove this program?'))
+        if (confirm('Remove this program from your list?'))
           setPreferences(preferences.filter(p => p.id !== id));
       };
 
-      // ✅ Already existed, now wired to UI buttons below
       const movePreference = (index, direction) => {
         const arr = [...preferences];
         if (direction === 'up' && index > 0)
@@ -319,34 +515,49 @@
         showToast('List sorted by QS Ranking.');
       };
 
-      /* ─── Cloud sync ────────────────────────────────────────────────────── */
-      const generateCloudLink = () => {
+      /* Cloud sync */
+      const [isShortening, setIsShortening] = useState(false);
+
+      const generateCloudLink = async () => {
         const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(preferences));
-        setSyncLink(`${window.location.origin}${window.location.pathname}?s=${compressed}`);
+        const longUrl = `${window.location.origin}${window.location.pathname}?s=${compressed}`;
+        setSyncLink('');
+        setIsShortening(true);
+        try {
+          const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+          if (!res.ok) throw new Error('TinyURL failed');
+          const short = await res.text();
+          setSyncLink(short.trim());
+        } catch {
+          // fallback to long url if TinyURL fails
+          setSyncLink(longUrl);
+          showToast('Could not shorten link, showing full URL.', 'warn');
+        } finally {
+          setIsShortening(false);
+        }
       };
 
-      /* ─── CSV Export ────────────────────────────────────────────────────── */
+      /* CSV Export */
       const handleExportCSV = () => {
         const headers = ['Rank','Degree','University Name','QS World Ranking','City/State','Country','Program Name','Duration','Language'];
-        const rows    = preferences.map((p, i) => [
+        const rows = preferences.map((p, i) => [
           i + 1, p.degreeType,
           `"${p.universityName.replace(/"/g,'""')}"`,
           p.qsRanking,
-          `"${(p.cityState  || '').replace(/"/g,'""')}"`,
-          `"${(p.country    || '').replace(/"/g,'""')}"`,
+          `"${(p.cityState || '').replace(/"/g,'""')}"`,
+          `"${(p.country || '').replace(/"/g,'""')}"`,
           `"${p.programName.replace(/"/g,'""')}"`,
           p.duration, p.language
         ].join(','));
-
         const csv  = '\uFEFF' + [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        link.href     = URL.createObjectURL(blob);
-        link.download = 'Study_Track_QS_Data.csv';
+        link.href = URL.createObjectURL(blob);
+        link.download = 'StudyTrack_Programs.csv';
         link.click();
       };
 
-      /* ─── CSV Import ────────────────────────────────────────────────────── */
+      /* CSV Import */
       const handleImportCSV = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -354,7 +565,6 @@
         reader.onload = (evt) => {
           const lines = evt.target.result.split('\n').filter(l => l.trim());
           if (lines.length < 2) return showToast('Invalid or empty CSV file.', 'error');
-
           const imported = [];
           for (let i = 1; i < lines.length; i++) {
             const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
@@ -381,37 +591,59 @@
         reader.readAsText(file);
       };
 
-      /* ══════════════════════════════════════════════════════════════════════
-         RENDER
-      ══════════════════════════════════════════════════════════════════════ */
+      const toastColors = {
+        success: { bg: '#1a1730', border: '#2d2550', text: 'white' },
+        error:   { bg: '#fef2f2', border: '#fecaca', text: '#dc2626' },
+        warn:    { bg: '#fffbeb', border: '#fde68a', text: '#92400e' }
+      };
+      const tc = toastColors[toast?.type] || toastColors.success;
+
+      /* ════════════════════════════════ RENDER ════════════════════════ */
       return (
-        <div className="min-h-screen pb-24 relative">
+        <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
 
           {/* Toast */}
           {toast && (
-            <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[60] px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-sm border ${toast.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-900 border-slate-700 text-white'}`}>
-              {toast.type === 'error' ? '⚠️' : '✨'} {toast.message}
+            <div className="toast-enter" style={{
+              position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+              zIndex: 9999, padding: '12px 20px', borderRadius: '14px',
+              background: tc.bg, border: `1px solid ${tc.border}`, color: tc.text,
+              fontWeight: 600, fontSize: '13.5px', display: 'flex', alignItems: 'center',
+              gap: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', whiteSpace: 'nowrap',
+              maxWidth: '90vw', overflow: 'hidden', textOverflow: 'ellipsis'
+            }}>
+              {toast.message}
             </div>
           )}
 
           {/* Header */}
-          <header className="glass-effect shadow-sm border-b border-slate-200 sticky top-0 z-40 print-hidden">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="bg-gradient-to-tr from-indigo-600 to-indigo-400 p-2.5 rounded-xl shadow-lg shadow-indigo-200">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <header className="glass print-hidden" style={{
+            borderBottom: '1px solid rgba(91,79,255,0.1)',
+            position: 'sticky', top: 0, zIndex: 40,
+            boxShadow: '0 2px 20px rgba(91,79,255,0.06)'
+          }}>
+            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #5b4fff, #8b7fff)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(91,79,255,0.35)'
+                }}>
+                  <svg width="18" height="18" fill="none" stroke="white" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 14l9-5-9-5-9 5 9 5z"/>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/>
                   </svg>
                 </div>
-                <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">
-                  Study<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Track</span>
-                </h1>
+                <span style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', color: 'var(--text)' }}>
+                  Study<span style={{ color: 'var(--accent)' }}>Track</span>
+                </span>
               </div>
               <button
                 onClick={() => { setShowSyncModal(true); generateCloudLink(); }}
-                className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold transition-all text-sm border border-indigo-200">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                className="btn-ghost"
+                style={{ fontSize: '12.5px' }}>
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                 </svg>
                 Short Link
@@ -419,230 +651,251 @@
             </div>
           </header>
 
-          <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <main style={{ maxWidth: '760px', margin: '0 auto', padding: '28px 16px' }}>
 
-            {/* Top action bar */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 print-hidden">
+            {/* Action bar */}
+            <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
               <div>
-                <h2 className="text-2xl font-black text-slate-800">Application Dashboard</h2>
-                <p className="text-sm text-slate-500 font-medium mt-1">Logo, Location & QS Ranking Automation</p>
+                <h2 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '22px', color: 'var(--text)', margin: 0 }}>
+                  Application Dashboard
+                </h2>
+                <p style={{ color: 'var(--text-2)', fontSize: '13px', marginTop: '3px' }}>
+                  Auto QS ranks · Logo detection · Cloud sync
+                </p>
               </div>
-
-              <div className="flex flex-wrap gap-3 w-full md:w-auto">
-
-                {/* ✅ FIX: Hidden input + <label htmlFor> is the ONLY reliable way to
-                    trigger file picker on mobile browsers. The old button.click() was
-                    blocked by Android Chrome's security policy. */}
-                <input
-                  type="file"
-                  id="csv-file-input"
-                  accept=".csv"
-                  ref={fileInputRef}
-                  onChange={handleImportCSV}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="csv-file-input"
-                  className="btn-label flex-1 md:flex-none flex justify-center items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl font-semibold transition-all shadow-sm text-sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <input type="file" id="csv-file-input" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} style={{ display: 'none' }} />
+                <label htmlFor="csv-file-input" className="btn-ghost" style={{ cursor: 'pointer' }}>
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                   </svg>
-                  Import CSV
+                  Import
                 </label>
-
-                <button onClick={handleExportCSV} className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-4 py-2.5 rounded-xl font-semibold transition-all text-sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onClick={handleExportCSV} className="btn-ghost" style={{ color: '#059669' }}>
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                   </svg>
                   Export CSV
                 </button>
-
-                <button onClick={() => window.print()} className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl font-semibold transition-all text-sm shadow-md">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onClick={() => window.print()} className="btn-ghost">
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                   </svg>
-                  Save PDF
+                  PDF
                 </button>
               </div>
             </div>
 
-            {/* ── Add Form ─────────────────────────────────────────────────── */}
-            <div className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-slate-200 mb-10 print-hidden relative overflow-visible z-10">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+            {/* ── Add Form ─────────────────────────────────────────── */}
+            <div className="card print-hidden" style={{ padding: '24px', marginBottom: '32px', position: 'relative', overflow: 'visible' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '10px', background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="15" height="15" fill="none" stroke="var(--accent)" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
                   </svg>
                 </div>
-                Add Target Program
-              </h3>
+                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '16px', color: 'var(--text)', margin: 0 }}>
+                  Add Target Program
+                </h3>
+              </div>
 
-              <form onSubmit={handleAddProgram} className="grid grid-cols-1 md:grid-cols-12 gap-5 relative z-20">
+              <form onSubmit={handleAddProgram}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
 
-                {/* Degree */}
-                <div className="md:col-span-3">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Degree</label>
-                  <select
-                    name="degreeType"
-                    value={formData.degreeType}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      degreeType: e.target.value,
-                      duration: e.target.value === "Master's" ? '2 Years' : '4 Years'
-                    })}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
-                    <option>Bachelor</option>
-                    <option>Master's</option>
-                    <option>PhD</option>
-                  </select>
-                </div>
-
-                {/* University + Suggestions */}
-                <div className="md:col-span-9 relative" ref={suggestionRef}>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 flex justify-between">
-                    University Name
-                    <span className="text-indigo-500 font-bold normal-case flex items-center gap-1">
-                      {isFetchingQS
-                        ? <span className="loader !w-3 !h-3 border-indigo-300 border-t-indigo-600"></span>
-                        : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                      }
-                      Live Global Search
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    name="universityName"
-                    value={formData.universityName}
-                    onChange={handleAddInputChange}
-                    onFocus={() => setShowSuggestions(true)}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
-                    placeholder="Type to search globally (e.g. King Saud)..."
-                    required
-                    autoComplete="off"
-                  />
-
-                  {isSearchingUniv && (
-                    <div className="absolute right-4 top-11">
-                      <div className="loader border-slate-300 border-t-slate-500"></div>
-                    </div>
-                  )}
-
-                  {showSuggestions && suggestions.length > 0 && (
-                    <ul className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 max-h-64 overflow-y-auto">
-                      {suggestions.map((univ, idx) => {
-                        const domain  = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
-                        const tmpLogo = domain ? `https://logo.clearbit.com/${domain}` : null;
-                        return (
-                          <li
-                            key={idx}
-                            onClick={() => selectSuggestion(univ)}
-                            className="px-5 py-3.5 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 flex items-center gap-4 group">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200">
-                              {tmpLogo
-                                ? <img src={tmpLogo} alt="" className="w-full h-full object-cover bg-white" onError={(e) => e.target.style.display='none'}/>
-                                : <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"/></svg>
-                              }
-                            </div>
-                            <div className="flex-grow">
-                              <p className="font-bold text-slate-800 group-hover:text-indigo-700 text-sm">{univ.name}</p>
-                              <p className="text-[11px] text-slate-500 font-bold mt-0.5">
-                                📍 {[univ['state-province'], univ.country].filter(Boolean).join(', ')}
-                              </p>
-                            </div>
-                          </li>
-                        );
+                  {/* Degree */}
+                  <div>
+                    <label className="label">Degree</label>
+                    <select
+                      name="degreeType"
+                      value={formData.degreeType}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        degreeType: e.target.value,
+                        duration: e.target.value === "Master's" ? '2 Years' : '4 Years'
                       })}
-                    </ul>
-                  )}
+                      className="input-field">
+                      <option>Bachelor</option>
+                      <option>Master's</option>
+                      <option>PhD</option>
+                    </select>
+                  </div>
+
+                  {/* QS Rank */}
+                  <div>
+                    <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      QS Rank
+                      {isFetchingQS && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 500, fontSize: '10px', color: 'var(--accent)', textTransform: 'none', letterSpacing: 0 }}>
+                          <div className="spinner" style={{ width: 11, height: 11 }}></div>
+                          Fetching…
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      name="qsRanking"
+                      value={formData.qsRanking}
+                      onChange={handleAddInputChange}
+                      className="input-field"
+                      placeholder="Auto-fetched or enter manually"/>
+                  </div>
+
+                  {/* University Name */}
+                  <div style={{ gridColumn: '1 / -1', position: 'relative' }} ref={suggestionRef}>
+                    <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      University Name
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 500, fontSize: '10px', color: 'var(--accent)', textTransform: 'none', letterSpacing: 0 }}>
+                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        Live Global Search
+                      </span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        name="universityName"
+                        value={formData.universityName}
+                        onChange={handleAddInputChange}
+                        onFocus={() => setShowSuggestions(true)}
+                        className="input-field"
+                        style={{ paddingRight: formData.universityName ? '40px' : '16px' }}
+                        placeholder="Type to search globally…"
+                        required
+                        autoComplete="off"
+                      />
+                      {/* ✅ University clear button */}
+                      {formData.universityName && (
+                        <button
+                          type="button"
+                          className="univ-clear-btn"
+                          onClick={clearUniversityFields}
+                          title="Clear university">
+                          <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/>
+                          </svg>
+                        </button>
+                      )}
+                      {isSearchingUniv && (
+                        <div style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)' }}>
+                          <div className="spinner"></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Suggestions dropdown */}
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div style={{
+                        position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+                        background: 'white', border: '1px solid var(--border)', borderRadius: '14px',
+                        boxShadow: '0 12px 40px rgba(91,79,255,0.15)', overflow: 'hidden', zIndex: 999,
+                        maxHeight: '280px', overflowY: 'auto'
+                      }}>
+                        {suggestions.map((univ, idx) => {
+                          const domain  = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
+                          const tmpLogo = domain ? `https://logo.clearbit.com/${domain}` : null;
+                          return (
+                            <div key={idx} className="suggestion-item" onClick={() => selectSuggestion(univ)}>
+                              <div style={{
+                                width: 36, height: 36, borderRadius: '10px',
+                                background: 'var(--surface-2)', flexShrink: 0,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                overflow: 'hidden', border: '1px solid var(--border)'
+                              }}>
+                                {tmpLogo
+                                  ? <img src={tmpLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.style.display='none'}/>
+                                  : <svg width="16" height="16" fill="var(--text-2)" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"/></svg>
+                                }
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{univ.name}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '2px' }}>
+                                  📍 {[univ['state-province'], univ.country].filter(Boolean).join(', ')}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* City/State */}
+                  <div>
+                    <label className="label">City / State</label>
+                    <input type="text" name="cityState" value={formData.cityState}
+                      onChange={handleAddInputChange} className="input-field" placeholder="Auto-filled or enter"/>
+                  </div>
+
+                  {/* Country */}
+                  <div>
+                    <label className="label">Country</label>
+                    <input type="text" name="country" value={formData.country}
+                      onChange={handleAddInputChange} className="input-field" placeholder="Auto-filled or enter"/>
+                  </div>
+
+                  {/* Program Title */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="label">Program Title <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input type="text" name="programName" value={formData.programName}
+                      onChange={handleAddInputChange} className="input-field"
+                      placeholder="e.g. BSc in Computer Science" required/>
+                  </div>
+
+                  {/* Duration */}
+                  <div>
+                    <label className="label">Duration</label>
+                    <select name="duration" value={formData.duration}
+                      onChange={handleAddInputChange} className="input-field">
+                      {[1,2,3,4,5].map(y => (
+                        <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Language */}
+                  <div>
+                    <label className="label">Language</label>
+                    <select name="language" value={formData.language}
+                      onChange={handleAddInputChange} className="input-field">
+                      <option>English</option>
+                      <option>Arabic</option>
+                      <option>Bilingual (Ar+En)</option>
+                      <option value="Others">Others…</option>
+                    </select>
+                    {formData.language === 'Others' && (
+                      <input type="text" name="customLanguage" value={formData.customLanguage}
+                        onChange={handleAddInputChange} className="input-field"
+                        style={{ marginTop: '8px' }} placeholder="Specify language…" required/>
+                    )}
+                  </div>
+
                 </div>
 
-                {/* QS Rank */}
-                <div className="md:col-span-3">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">QS Rank</label>
-                  <input
-                    type="text"
-                    name="qsRanking"
-                    value={formData.qsRanking}
-                    onChange={handleAddInputChange}
-                    className={`w-full p-3.5 border rounded-xl font-bold text-slate-800 outline-none transition-all ${isFetchingQS ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-100 animate-pulse' : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500'}`}
-                    placeholder="Auto/Manual..."
-                  />
-                </div>
-
-                {/* City */}
-                <div className="md:col-span-4">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">City/State</label>
-                  <input type="text" name="cityState" value={formData.cityState} onChange={handleAddInputChange}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
-                    placeholder="City or State"/>
-                </div>
-
-                {/* Country */}
-                <div className="md:col-span-5">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Country</label>
-                  <input type="text" name="country" value={formData.country} onChange={handleAddInputChange}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
-                    placeholder="Country"/>
-                </div>
-
-                {/* Program */}
-                <div className="md:col-span-6">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                    Program Title <span className="text-rose-500">*</span>
-                  </label>
-                  <input type="text" name="programName" value={formData.programName} onChange={handleAddInputChange}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
-                    placeholder="e.g. BSc in Computer Science" required/>
-                </div>
-
-                {/* Duration */}
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Duration</label>
-                  <select name="duration" value={formData.duration} onChange={handleAddInputChange}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
-                    {[1,2,3,4,5].map(y => (
-                      <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Language */}
-                <div className="md:col-span-4">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Language</label>
-                  {/* ✅ Added Bilingual option to match startEditing logic */}
-                  <select name="language" value={formData.language} onChange={handleAddInputChange}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
-                    <option>English</option>
-                    <option>Arabic</option>
-                    <option>Bilingual (Ar+En)</option>
-                    <option value="Others">Others...</option>
-                  </select>
-                  {formData.language === 'Others' && (
-                    <input type="text" name="customLanguage" value={formData.customLanguage} onChange={handleAddInputChange}
-                      className="w-full p-3.5 mt-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
-                      placeholder="Specify..." required/>
-                  )}
-                </div>
-
-                <div className="md:col-span-12 flex justify-end mt-2">
-                  <button type="submit"
-                    className="px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
+                  <button type="submit" className="btn-primary">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
                     </svg>
-                    Add to List
+                    Add Program
                   </button>
                 </div>
               </form>
             </div>
 
-            {/* ── Preference List ───────────────────────────────────────────── */}
-            <div className="flex justify-between items-center mb-6 mt-12 print-hidden">
-              <h3 className="text-xl font-bold text-slate-800">Your Preference List</h3>
+            {/* ── Preference List ───────────────────────────────────── */}
+            <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', margin: 0 }}>
+                Preference List
+                {preferences.length > 0 && (
+                  <span style={{ fontSize: '13px', fontFamily: 'DM Sans', fontWeight: 600, color: 'var(--text-2)', marginLeft: '8px' }}>
+                    ({preferences.length})
+                  </span>
+                )}
+              </h3>
               {preferences.length > 1 && (
-                <button onClick={handleSortClick}
-                  className="flex items-center gap-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold text-sm transition-all border border-indigo-200 shadow-sm active:scale-95">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onClick={handleSortClick} className="btn-ghost" style={{ fontSize: '12px', color: 'var(--accent)' }}>
+                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
                   </svg>
                   Sort by Rank
@@ -650,168 +903,157 @@
               )}
             </div>
 
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {preferences.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-[2rem] border border-dashed border-slate-300 print-hidden">
-                  <h3 className="text-xl font-extrabold text-slate-800">Your list is empty!</h3>
-                  <p className="text-slate-500 mt-2 font-medium">Search and add your target universities above.</p>
+                <div className="print-hidden" style={{
+                  textAlign: 'center', padding: '64px 20px',
+                  background: 'white', borderRadius: '20px',
+                  border: '1.5px dashed var(--border)'
+                }}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎓</div>
+                  <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', marginBottom: '6px' }}>
+                    Your list is empty
+                  </h3>
+                  <p style={{ color: 'var(--text-2)', fontSize: '13.5px' }}>
+                    Search and add your target universities above.
+                  </p>
                 </div>
               ) : (
                 preferences.map((pref, index) => (
                   <div
                     key={pref.id}
-                    className="print-card relative bg-white p-6 sm:p-7 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-6 items-start sm:items-center hover:shadow-md hover:border-indigo-200 transition-all group overflow-hidden">
+                    className="card prog-card-enter print-card"
+                    style={{ padding: '18px 20px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
-                    {/* Badge */}
-                    <div className="absolute -top-1 -left-1 sm:static sm:top-auto sm:left-auto flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 bg-slate-900 text-white rounded-br-[1.5rem] sm:rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg z-10">
-                      #{index + 1}
-                    </div>
-
-                    {/* Logo */}
-                    {pref.logoUrl && (
-                      <div className="hidden sm:flex w-16 h-16 rounded-full bg-white border border-slate-100 shadow-sm p-1 flex-shrink-0 items-center justify-center overflow-hidden">
-                        <img src={pref.logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display='none'}/>
-                      </div>
-                    )}
+                    {/* Number badge */}
+                    <div className="num-badge" style={{ marginTop: '2px' }}>#{index + 1}</div>
 
                     {editingId !== pref.id ? (
                       /* ── View mode ── */
-                      <>
-                        <div className="flex-grow min-w-0 mt-8 sm:mt-0 w-full pl-2 sm:pl-0">
-                          <div className="flex flex-wrap items-center gap-3 mb-2">
-                            <h3 className="text-xl font-extrabold text-slate-800 break-words leading-tight">{pref.universityName}</h3>
-                            <div className="flex gap-2">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black tracking-wide border ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                                </svg>
-                                QS: {pref.qsRanking}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {/* Logo + Name row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                              {pref.logoUrl && (
+                                <div style={{ width: 32, height: 32, borderRadius: '8px', overflow: 'hidden', background: 'white', border: '1px solid var(--border)', flexShrink: 0 }}>
+                                  <img src={pref.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.parentElement.style.display='none'}/>
+                                </div>
+                              )}
+                              <h4 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '15px', color: 'var(--text)', margin: 0, lineHeight: '1.3' }}>
+                                {pref.universityName}
+                              </h4>
+                            </div>
+
+                            {/* Badges row */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                              <span className={`rank-badge ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'rank-num' : 'rank-na'}`}>
+                                ⭐ QS {pref.qsRanking || 'N/A'}
                               </span>
                               {(pref.cityState || pref.country) && (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', padding: '3px 10px' }}>
                                   📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
+                                </span>
+                              )}
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', border: '1px solid #d4caff', borderRadius: '8px', padding: '3px 10px' }}>
+                                {pref.degreeType}
+                              </span>
+                            </div>
+
+                            {/* Program */}
+                            <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
+                              {pref.programName}
+                            </div>
+
+                            {/* Meta tags */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {pref.duration && (
+                                <span style={{ fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px 8px', fontWeight: 500 }}>
+                                  ⏱ {pref.duration}
+                                </span>
+                              )}
+                              {pref.language && (
+                                <span style={{ fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px 8px', fontWeight: 500 }}>
+                                  🌐 {pref.language}
                                 </span>
                               )}
                             </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 text-indigo-700 font-bold mb-2">
-                            <span className="bg-indigo-50 px-3 py-1 rounded-lg text-sm border border-indigo-100">{pref.degreeType}</span>
-                            <span className="text-slate-700 font-semibold">in {pref.programName}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs text-slate-500 font-medium">
-                            {pref.duration && <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">⏱ {pref.duration}</span>}
-                            {pref.language && <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">🌐 {pref.language}</span>}
-                          </div>
-                        </div>
 
-                        <div className="flex sm:flex-col items-center justify-end gap-2.5 w-full sm:w-auto mt-5 sm:mt-0 print-hidden border-t sm:border-t-0 border-slate-100 pt-5 sm:pt-0">
-                          {/* ✅ FIX: Up/Down buttons now wired to movePreference */}
-                          <div className="flex gap-1.5 mb-1">
-                            <button
-                              onClick={() => movePreference(index, 'up')}
-                              disabled={index === 0}
-                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Move Up">
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/>
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => movePreference(index, 'down')}
-                              disabled={index === preferences.length - 1}
-                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Move Down">
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/>
-                              </svg>
-                            </button>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => startEditing(pref)}
-                              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          {/* Action buttons */}
+                          <div className="print-hidden" style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                              <button className="icon-btn" onClick={() => movePreference(index, 'up')} disabled={index === 0} title="Move Up">
+                                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/>
+                                </svg>
+                              </button>
+                              <button className="icon-btn" onClick={() => movePreference(index, 'down')} disabled={index === preferences.length - 1} title="Move Down">
+                                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                              </button>
+                            </div>
+                            <button className="icon-btn" onClick={() => startEditing(pref)} title="Edit">
+                              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                               </svg>
                             </button>
-                            <button onClick={() => handleDelete(pref.id)}
-                              className="p-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-200 shadow-sm">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button className="icon-btn danger" onClick={() => handleDelete(pref.id)} title="Delete">
+                              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                               </svg>
                             </button>
                           </div>
                         </div>
-                      </>
+                      </div>
                     ) : (
-                      /* ── Edit mode ✅ FIX: all fields now editable ── */
-                      <div className="flex-grow w-full">
-                        <div className="grid grid-cols-2 gap-3 mb-4">
+                      /* ── Edit mode ── */
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                           <input type="text" value={editFormData.universityName}
                             onChange={e => setEditFormData({...editFormData, universityName: e.target.value})}
-                            className="col-span-2 p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
-                            placeholder="University Name"/>
-
+                            className="input-field" style={{ gridColumn: '1/-1' }} placeholder="University Name"/>
                           <input type="text" value={editFormData.programName}
                             onChange={e => setEditFormData({...editFormData, programName: e.target.value})}
-                            className="col-span-2 p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
-                            placeholder="Program Title"/>
-
-                          {/* ✅ Degree */}
+                            className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Program Title"/>
                           <select value={editFormData.degreeType}
                             onChange={e => setEditFormData({...editFormData, degreeType: e.target.value})}
-                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
-                            <option>Bachelor</option>
-                            <option>Master's</option>
-                            <option>PhD</option>
+                            className="input-field">
+                            <option>Bachelor</option><option>Master's</option><option>PhD</option>
                           </select>
-
                           <input type="text" value={editFormData.qsRanking}
                             onChange={e => setEditFormData({...editFormData, qsRanking: e.target.value})}
-                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
-                            placeholder="QS Rank"/>
-
+                            className="input-field" placeholder="QS Rank"/>
                           <input type="text" value={editFormData.cityState}
                             onChange={e => setEditFormData({...editFormData, cityState: e.target.value})}
-                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
-                            placeholder="City/State"/>
-
-                          {/* ✅ Country */}
+                            className="input-field" placeholder="City/State"/>
                           <input type="text" value={editFormData.country}
                             onChange={e => setEditFormData({...editFormData, country: e.target.value})}
-                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
-                            placeholder="Country"/>
-
-                          {/* ✅ Duration */}
+                            className="input-field" placeholder="Country"/>
                           <select value={editFormData.duration}
                             onChange={e => setEditFormData({...editFormData, duration: e.target.value})}
-                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                            className="input-field">
                             {[1,2,3,4,5].map(y => (
                               <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
                             ))}
                           </select>
-
-                          {/* ✅ Language (includes Bilingual) */}
                           <select value={editFormData.language}
                             onChange={e => setEditFormData({...editFormData, language: e.target.value})}
-                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
-                            <option>English</option>
-                            <option>Arabic</option>
+                            className="input-field">
+                            <option>English</option><option>Arabic</option>
                             <option>Bilingual (Ar+En)</option>
-                            <option value="Others">Others...</option>
+                            <option value="Others">Others…</option>
                           </select>
-
                           {editFormData.language === 'Others' && (
                             <input type="text" value={editFormData.customLanguage || ''}
                               onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
-                              className="col-span-2 p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
-                              placeholder="Specify language..."/>
+                              className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Specify language…"/>
                           )}
                         </div>
-                        <div className="flex justify-end gap-2">
-                          <button onClick={() => setEditingId(null)}
-                            className="px-5 py-2.5 border rounded-xl font-bold shadow-sm hover:bg-slate-50">Cancel</button>
-                          <button onClick={saveEdit}
-                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md">Save</button>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                          <button onClick={() => setEditingId(null)} className="btn-ghost">Cancel</button>
+                          <button onClick={saveEdit} className="btn-primary" style={{ padding: '10px 20px', fontSize: '13px' }}>Save</button>
                         </div>
                       </div>
                     )}
@@ -823,24 +1065,63 @@
 
           {/* Cloud Sync Modal */}
           {showSyncModal && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl relative">
-                <button onClick={() => setShowSyncModal(false)}
-                  className="absolute top-5 right-5 text-slate-400 p-2 rounded-full hover:bg-slate-100 transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(26,23,48,0.5)',
+              backdropFilter: 'blur(12px)',
+              zIndex: 9998,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px'
+            }}>
+              <div style={{
+                background: 'white', borderRadius: '24px', padding: '32px',
+                maxWidth: '420px', width: '100%',
+                boxShadow: '0 24px 80px rgba(91,79,255,0.25)',
+                position: 'relative'
+              }}>
+                <button
+                  onClick={() => setShowSyncModal(false)}
+                  style={{
+                    position: 'absolute', top: '16px', right: '16px',
+                    width: 32, height: 32, borderRadius: '10px',
+                    border: '1px solid var(--border)', background: 'white',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--text-2)'
+                  }}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/>
                   </svg>
                 </button>
-                <div className="text-center mb-6">
-                  <h3 className="text-2xl font-black text-slate-800">Short Cloud Link</h3>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 break-all text-xs max-h-32 overflow-y-auto font-mono">
-                  {syncLink}
+                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', marginBottom: '6px', color: 'var(--text)' }}>
+                  Cloud Sync Link
+                </h3>
+                <p style={{ fontSize: '12.5px', color: 'var(--text-2)', marginBottom: '16px' }}>
+                  Share this link to restore your list on any device.
+                </p>
+                <div style={{
+                  background: 'var(--surface-2)', padding: '16px', borderRadius: '14px',
+                  border: '1.5px solid var(--border)', marginBottom: '16px',
+                  display: 'flex', alignItems: 'center', gap: '10px', minHeight: '56px'
+                }}>
+                  {isShortening ? (
+                    <>
+                      <div className="spinner"></div>
+                      <span style={{ fontSize: '13px', color: 'var(--text-2)' }}>Shortening link…</span>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '15px', wordBreak: 'break-all' }}>
+                      {syncLink}
+                    </span>
+                  )}
                 </div>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(syncLink); showToast('Link Copied Successfully!'); }}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">
-                  Copy Link
+                  onClick={() => { navigator.clipboard.writeText(syncLink); showToast('✅ Link copied!'); }}
+                  disabled={isShortening || !syncLink}
+                  className="btn-primary" style={{ width: '100%', justifyContent: 'center', opacity: (isShortening || !syncLink) ? 0.5 : 1 }}>
+                  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  </svg>
+                  Copy Short Link
                 </button>
               </div>
             </div>
