@@ -50,6 +50,22 @@
         border-radius: 12px !important;
         break-inside: avoid;
         margin-bottom: 16px;
+        page-break-inside: avoid;
+      }
+      /* PDF: show university count header */
+      .print-header {
+        display: block !important;
+        font-family: 'Bricolage Grotesque', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: #1a1730;
+        margin-bottom: 4px;
+      }
+      .print-subtitle {
+        display: block !important;
+        font-size: 13px;
+        color: #6b6888;
+        margin-bottom: 20px;
       }
     }
 
@@ -432,7 +448,8 @@
         duration: '4 Years',
         language: 'English',
         customLanguage: '',
-        logoUrl: ''
+        logoUrl: '',
+        gender: 'Both'
       };
 
       const [formData, setFormData] = useState(defaultForm);
@@ -447,7 +464,55 @@
 
       const suggestionRef  = useRef(null);
       const fileInputRef   = useRef(null);
+      const qsFileInputRef = useRef(null);
       const debouncedSearch = useDebounce(formData.universityName, 500);
+
+      /* ── City auto-fetch via Wikidata ─────────────────────────────── */
+      const fetchCityForUniversity = async (univName, country) => {
+        try {
+          // Use Wikidata SPARQL to find city/location of the university
+          const sparql = `
+            SELECT ?cityLabel WHERE {
+              ?univ wdt:P31/wdt:P279* wd:Q3918 .
+              ?univ rdfs:label "${univName.replace(/"/g, '\\"')}"@en .
+              ?univ wdt:P131 ?city .
+              SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+            } LIMIT 1
+          `;
+          const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
+          const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          if (!res.ok) return;
+          const data = await res.json();
+          const city = data?.results?.bindings?.[0]?.cityLabel?.value;
+          if (city && !city.startsWith('Q')) {
+            setFormData(prev => ({ ...prev, cityState: city }));
+          }
+        } catch {
+          // silent fail — user can enter manually
+        }
+      };
+
+      /* ── Manual QS XLSX import ────────────────────────────────────── */
+      const handleManualQSImport = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const db = parseQSXlsx(evt.target.result);
+            const count = Object.keys(db).length;
+            if (count === 0) { showToast('❌ No universities found in file.', 'error'); return; }
+            setQsDb(db);
+            setQsDbMeta({ count, loadedAt: new Date().toLocaleDateString() });
+            setQsError(false);
+            showToast(`✅ Loaded ${count} universities from file.`);
+          } catch {
+            showToast('❌ Failed to parse QS file.', 'error');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+        e.target.value = null;
+      };
 
       /* Auto-save preferences */
       useEffect(() => {
@@ -521,38 +586,40 @@
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         if (rows.length < 3) return {};
 
-        // QS 2026 format: row 0 = title, row 1 = group headers, row 2 = sub-headers
-        let headerRowIdx = 0;
+        // QS 2026 xlsx structure:
+        //   Row 0: title row
+        //   Row 1: group headers (2026, 2025, Institution, Location…)
+        //   Row 2: sub-headers (Index, Rank, Previous Rank, Name, Country/Territory…)
+        //   Row 3+: data
+        // Find the header row that has 'name' or 'rank' in it
+        let headerRowIdx = 2; // default for QS 2026
         for (let i = 0; i < Math.min(6, rows.length); i++) {
           const cells = rows[i].map(c => String(c).toLowerCase().trim());
-          const hasName = cells.some(c => c === 'name' || c === 'institution');
-          const hasRank = cells.some(c => c === 'rank' || c === '2026' || c === '2025');
-          if (hasName || hasRank) { headerRowIdx = i; break; }
+          if (cells.some(c => c === 'name' || c === 'rank')) { headerRowIdx = i; break; }
         }
 
         const header = rows[headerRowIdx].map(c => String(c).toLowerCase().trim());
 
-        let nameIdx = header.findIndex(c => c === 'name' || c === 'institution');
-        if (nameIdx === -1) nameIdx = header.findIndex(c => c.includes('name') || c.includes('institution') || c.includes('university'));
-
-        let rankIdx = header.findIndex(c => c === '2026' || c === '2025');
-        if (rankIdx === -1) rankIdx = header.findIndex(c => c === 'rank');
-        if (rankIdx === -1) rankIdx = header.findIndex(c => c.includes('rank'));
-
-        // QS standard fallback: col1=Rank, col3=Name, col4=Country
-        if (rankIdx === -1) rankIdx = 1;
+        // QS 2026 known columns: [Index, Rank, Previous Rank, Name, Country/Territory, ...]
+        let nameIdx    = header.findIndex(c => c === 'name');
+        if (nameIdx === -1) nameIdx = header.findIndex(c => c.includes('name') || c.includes('institution'));
         if (nameIdx === -1) nameIdx = 3;
 
-        let countryIdx = header.findIndex(c => c === 'country/territory' || c === 'country' || c === 'location');
+        let rankIdx    = header.findIndex(c => c === 'rank');
+        if (rankIdx === -1) rankIdx = header.findIndex(c => c.includes('rank'));
+        if (rankIdx === -1) rankIdx = 1;
+
+        let countryIdx = header.findIndex(c => c === 'country/territory' || c === 'country');
+        if (countryIdx === -1) countryIdx = header.findIndex(c => c.includes('country') || c === 'location');
         if (countryIdx === -1) countryIdx = 4;
 
         const db = {};
         for (let i = headerRowIdx + 1; i < rows.length; i++) {
           const row = rows[i];
-          const rawName = String(row[nameIdx] || '').trim();
-          const rawRank = String(row[rankIdx] || '').trim();
+          const rawName    = String(row[nameIdx]    || '').trim();
+          const rawRank    = String(row[rankIdx]    || '').trim();
           const rawCountry = String(row[countryIdx] || '').trim();
-          if (!rawName || rawName.toLowerCase() === 'name' || rawName.toLowerCase() === 'institution') continue;
+          if (!rawName || rawName.toLowerCase() === 'name') continue;
           if (rawName.length < 3) continue;
           db[rawName.toLowerCase()] = { originalName: rawName, rank: rawRank || 'N/A', country: rawCountry };
         }
@@ -624,14 +691,17 @@
       };
 
       const selectSuggestion = (univ) => {
-        // Use exact rank and name directly from QS data
-        const rank = univ._qsRank || '';
+        const rank    = univ._qsRank    || '';
+        const country = univ._qsCountry || '';
         setFormData(prev => ({
           ...prev,
           universityName: univ.name,
-          qsRanking: rank,
+          qsRanking:      rank,
+          country:        country,
         }));
         setShowSuggestions(false);
+        // After filling country, try to fetch city via API
+        if (univ.name) fetchCityForUniversity(univ.name, country);
         if (rank && rank !== 'N/A') {
           showToast(`✅ QS Rank found: ${rank}`);
         } else {
@@ -657,7 +727,8 @@
           programName:    formData.programName,
           duration:       formData.duration,
           language:       finalLang,
-          logoUrl:        formData.logoUrl
+          logoUrl:        formData.logoUrl,
+          gender:         formData.gender || 'Both'
         };
 
         setPreferences(sortByRank([...preferences, newPref]));
@@ -695,7 +766,7 @@
           ? (editFormData.customLanguage || 'Not Specified')
           : editFormData.language;
         const updated = preferences.map(p =>
-          p.id === editingId ? { ...editFormData, language: finalLang } : p
+          p.id === editingId ? { ...editFormData, language: finalLang, gender: editFormData.gender || 'Both' } : p
         );
         setPreferences(sortByRank(updated));
         setEditingId(null);
@@ -744,7 +815,7 @@
 
       /* CSV Export */
       const handleExportCSV = () => {
-        const headers = ['Rank','Degree','University Name','QS World Ranking','City/State','Country','Program Name','Duration','Language'];
+        const headers = ['Rank','Degree','University Name','QS World Ranking','City/State','Country','Program Name','Duration','Language','Gender'];
         const rows = preferences.map((p, i) => [
           i + 1, p.degreeType,
           `"${p.universityName.replace(/"/g,'""')}"`,
@@ -752,7 +823,8 @@
           `"${(p.cityState || '').replace(/"/g,'""')}"`,
           `"${(p.country || '').replace(/"/g,'""')}"`,
           `"${p.programName.replace(/"/g,'""')}"`,
-          p.duration, p.language
+          p.duration, p.language,
+          p.gender || 'Both'
         ].join(','));
         const csv  = '\uFEFF' + [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -907,30 +979,66 @@
               </div>
             </div>
 
-            {/* ── QS Status (invisible to user, just loading indicator) ── */}
-            {qsLoading && (
+            {/* ── QS Status bar ─────────────────────────────────────── */}
+            {(qsLoading || qsError || qsDb) && (
               <div className="print-hidden" style={{
-                background: 'linear-gradient(135deg, #eef2ff 0%, #ede9ff 100%)',
-                border: '1.5px solid #c7d2fe', borderRadius: '16px',
-                padding: '12px 18px', display: 'flex', alignItems: 'center',
-                gap: '12px', marginBottom: '20px'
+                background: qsError ? '#fef2f2' : 'linear-gradient(135deg, #eef2ff 0%, #ede9ff 100%)',
+                border: `1.5px solid ${qsError ? '#fecaca' : '#c7d2fe'}`,
+                borderRadius: '16px', padding: '12px 18px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: '12px', marginBottom: '20px', flexWrap: 'wrap'
               }}>
-                <div className="spinner"></div>
-                <span style={{ fontSize: '13px', color: '#4338ca', fontWeight: 600 }}>
-                  Loading QS Rankings data…
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {qsLoading && <div className="spinner"></div>}
+                  {qsError && <span style={{ fontSize: '16px' }}>⚠️</span>}
+                  {qsDb && !qsLoading && <span style={{ fontSize: '16px' }}>✅</span>}
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: qsError ? '#dc2626' : '#4338ca' }}>
+                    {qsLoading
+                      ? 'Loading QS Rankings data…'
+                      : qsError
+                        ? 'Could not load QS data — enter manually or import below'
+                        : `${qsDbMeta?.count?.toLocaleString() || 0} universities loaded`}
+                  </span>
+                </div>
+                {/* Manual QS import */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="file" id="qs-file-input" accept=".xlsx,.xls"
+                    ref={qsFileInputRef} onChange={handleManualQSImport}
+                    style={{ display: 'none' }}
+                  />
+                  <label htmlFor="qs-file-input" className="btn-ghost" style={{ fontSize: '11.5px', padding: '7px 13px', cursor: 'pointer', borderColor: qsError ? '#fca5a5' : undefined }}>
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    {qsDb ? 'Replace QS Data' : 'Import QS XLSX'}
+                  </label>
+                </div>
               </div>
             )}
-            {qsError && (
+            {/* Show import button even before first load attempt if not loading */}
+            {!qsLoading && !qsError && !qsDb && (
               <div className="print-hidden" style={{
                 background: '#fef2f2', border: '1.5px solid #fecaca',
                 borderRadius: '16px', padding: '12px 18px',
-                display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px'
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: '12px', marginBottom: '20px', flexWrap: 'wrap'
               }}>
-                <span style={{ fontSize: '18px' }}>⚠️</span>
-                <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
-                  Could not load QS Rankings. University search unavailable — enter details manually.
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '16px' }}>⚠️</span>
+                  <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
+                    QS data not loaded — import manually
+                  </span>
+                </div>
+                <div>
+                  <input type="file" id="qs-file-input-b" accept=".xlsx,.xls" onChange={handleManualQSImport} style={{ display: 'none' }} />
+                  <label htmlFor="qs-file-input-b" className="btn-ghost" style={{ fontSize: '11.5px', padding: '7px 13px', cursor: 'pointer' }}>
+                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    Import QS XLSX
+                  </label>
+                </div>
               </div>
             )}
 
@@ -1099,6 +1207,17 @@
                     )}
                   </div>
 
+                  {/* Gender */}
+                  <div>
+                    <label className="label">Admission Gender</label>
+                    <select name="gender" value={formData.gender}
+                      onChange={handleAddInputChange} className="input-field">
+                      <option value="Both">Both</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
@@ -1110,6 +1229,14 @@
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* Print-only header */}
+            <div style={{ display: 'none' }} className="print-header">
+              StudyTrack — University Preference List
+            </div>
+            <div style={{ display: 'none' }} className="print-subtitle">
+              {preferences.length} programs · Generated {new Date().toLocaleDateString()}
             </div>
 
             {/* ── Preference List ───────────────────────────────────── */}
@@ -1162,8 +1289,8 @@
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            {/* Logo + Name row */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                            {/* Logo + Name + QS Rank row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                               {pref.logoUrl && (
                                 <div style={{ width: 32, height: 32, borderRadius: '8px', overflow: 'hidden', background: 'white', border: '1px solid var(--border)', flexShrink: 0 }}>
                                   <img src={pref.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.parentElement.style.display='none'}/>
@@ -1172,13 +1299,13 @@
                               <h4 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '15px', color: 'var(--text)', margin: 0, lineHeight: '1.3' }}>
                                 {pref.universityName}
                               </h4>
+                              <span className={`rank-badge ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'rank-num' : 'rank-na'}`}>
+                                ⭐ QS {pref.qsRanking || 'N/A'}
+                              </span>
                             </div>
 
                             {/* Badges row */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                              <span className={`rank-badge ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'rank-num' : 'rank-na'}`}>
-                                ⭐ QS {pref.qsRanking || 'N/A'}
-                              </span>
                               {(pref.cityState || pref.country) && (
                                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', padding: '3px 10px' }}>
                                   📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
@@ -1187,11 +1314,16 @@
                               <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', border: '1px solid #d4caff', borderRadius: '8px', padding: '3px 10px' }}>
                                 {pref.degreeType}
                               </span>
+                              {pref.gender && pref.gender !== 'Both' && (
+                                <span style={{ fontSize: '11px', fontWeight: 600, color: pref.gender === 'Male' ? '#1d4ed8' : '#be185d', background: pref.gender === 'Male' ? '#dbeafe' : '#fce7f3', border: `1px solid ${pref.gender === 'Male' ? '#93c5fd' : '#f9a8d4'}`, borderRadius: '8px', padding: '3px 10px' }}>
+                                  {pref.gender === 'Male' ? '♂ Male' : '♀ Female'}
+                                </span>
+                              )}
                             </div>
 
-                            {/* Program */}
+                            {/* Program — "Bachelor in X" format */}
                             <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
-                              {pref.programName}
+                              {pref.degreeType} in {pref.programName}
                             </div>
 
                             {/* Meta tags */}
@@ -1279,6 +1411,13 @@
                               onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
                               className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Specify language…"/>
                           )}
+                          <select value={editFormData.gender || 'Both'}
+                            onChange={e => setEditFormData({...editFormData, gender: e.target.value})}
+                            className="input-field">
+                            <option value="Both">Both</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                          </select>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                           <button onClick={() => setEditingId(null)} className="btn-ghost">Cancel</button>
