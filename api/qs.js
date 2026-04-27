@@ -1,4 +1,3 @@
-// api/qs.js
 export default async function handler(req, res) {
   const { univ } = req.query;
 
@@ -7,71 +6,109 @@ export default async function handler(req, res) {
   }
 
   const googleKey = process.env.GOOGLE_API_KEY;
-  const googleCx = process.env.GOOGLE_CX_ID;
+  const googleCx  = process.env.GOOGLE_CX_ID;
   const serperKey = process.env.SERPER_API_KEY;
 
-  // Query updated for more precise results specifically from topuniversities
-  const query = `"${univ}" "QS World University Rankings 2025" site:topuniversities.com`;
+  
+  const query = `"${univ}" QS World University Rankings 2026 site:topuniversities.com`;
   let rank = null;
 
-  // Improved Regex to strictly catch the main QS ranking
-  // Looks for patterns like "Ranked #143" or "Rank: 143" or just "#143" near "QS World University Rankings"
-  const extractRank = (snippet) => {
-    if (!snippet) return null;
-    
-    // Pattern 1: Exact matches like "Ranked #143" or "Rank 143"
-    const strictMatch = snippet.match(/(?:rank(?:ed)?\s*#?|ranking\s*#?)(\d{1,4}(?:-\d{1,4})?)/i);
-    if (strictMatch && strictMatch[1]) return strictMatch[1];
+  
+  const extractRank = (snippet, title) => {
+    if (!snippet && !title) return null;
+    const text = `${title || ''} ${snippet || ''}`;
 
-    // Pattern 2: Looks for #Number close to QS related text
-    const fallbackMatch = snippet.match(/#\s*(\d{1,4}(?:-\d{1,4})?)\s*(?:in|QS|World|University)/i);
-    if (fallbackMatch && fallbackMatch[1]) return fallbackMatch[1];
+    
+    const isSubjectRank = (matchIndex, captured) => {
+      const start = Math.max(0, matchIndex - 80);
+      const end   = Math.min(text.length, matchIndex + captured.length + 80);
+      const ctx   = text.slice(start, end);
+      return /by\s+(?:subject|faculty|topic|area|discipline)/i.test(ctx);
+    };
+
+    const patternA = /#\s*(\d{1,4}(?:-\d{1,4})?)\s*(?:in\s+)?(?=QS World)|(?:QS World University Rankings?[^\n#]{0,80}?)#\s*(\d{1,4}(?:-\d{1,4})?)/gi;
+    let mA;
+    while ((mA = patternA.exec(text)) !== null) {
+      const r   = mA[1] || mA[2];
+      const idx = text.indexOf(r, mA.index);
+      if (!isSubjectRank(idx, r)) return r;
+    }
+
+    
+    const patternB = /\b(?:rank(?:ed|ing)?)\s*[:#]?\s*(\d{1,4}(?:-\d{1,4})?)\b/gi;
+    let mB;
+    while ((mB = patternB.exec(text)) !== null) {
+      const r   = mB[1];
+      const idx = text.indexOf(r, mB.index);
+      if (!isSubjectRank(idx, r)) return r;
+    }
+
+    const patternC = /=\s*(\d{1,4})\s+(?:in|QS)/i;
+    const mC = text.match(patternC);
+    if (mC) {
+      const idx = text.indexOf(mC[1]);
+      if (!isSubjectRank(idx, mC[1])) return mC[1];
+    }
 
     return null;
   };
 
-  if (googleKey && googleCx && !rank) {
+  // Google Custom Search 
+  if (googleKey && googleCx) {
     try {
-      const gUrl = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}`;
-      const r = await fetch(gUrl);
+      const gUrl = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=5`;
+      const r    = await fetch(gUrl);
       const data = await r.json();
-      
+
       if (data.items) {
-        for (let item of data.items) {
-          // Check both snippet and page title for rank
-          rank = extractRank(item.snippet) || extractRank(item.title);
+        
+        const sorted = [...data.items].sort((a, b) => {
+          const aProfile = a.link?.includes('/universities/') ? 0 : 1;
+          const bProfile = b.link?.includes('/universities/') ? 0 : 1;
+          return aProfile - bProfile;
+        });
+
+        for (const item of sorted) {
+          rank = extractRank(item.snippet, item.title);
           if (rank) break;
         }
       }
     } catch (e) {
-      console.error("Google API Failed", e);
+      console.error('Google API Failed', e);
     }
   }
 
+  // Serper Fallback
   if (!rank && serperKey) {
     try {
       const r = await fetch('https://google.serper.dev/search', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ q: query })
+        body:    JSON.stringify({ q: query, num: 5 }),
       });
       const data = await r.json();
-      
+
       if (data.organic) {
-        for (let item of data.organic) {
-          rank = extractRank(item.snippet) || extractRank(item.title);
+        const sorted = [...data.organic].sort((a, b) => {
+          const aProfile = a.link?.includes('/universities/') ? 0 : 1;
+          const bProfile = b.link?.includes('/universities/') ? 0 : 1;
+          return aProfile - bProfile;
+        });
+
+        for (const item of sorted) {
+          rank = extractRank(item.snippet, item.title);
           if (rank) break;
         }
       }
     } catch (e) {
-      console.error("Serper API Failed", e);
+      console.error('Serper API Failed', e);
     }
   }
 
+  
   if (rank) {
     return res.status(200).json({ rank });
   } else {
-    // If exact rank is not found, return N/A so the user can input it manually without errors
-    return res.status(200).json({ rank: 'N/A' }); 
+    return res.status(404).json({ rank: null });
   }
 }
