@@ -305,7 +305,7 @@
       return dv;
     }
 
-    let _univCache = null;
+    // External API removed — suggestions come only from QS database
 
     /* ─── QS CSV Lookup ───────────────────────────────────────────────── */
     // qsDb: { "university name lowercase": "rank" }
@@ -349,6 +349,11 @@
     const normalizeUnivName = (s) => s.toLowerCase().trim()
       .replace(/[''`]/g, "'")
       .replace(/[^a-z0-9\s']/g, ' ')
+      // Normalize common spelling variants
+      .replace(/\bmadinah\b/g, 'medinah')
+      .replace(/\bmedina\b/g, 'medinah')
+      .replace(/\bjeddah\b/g, 'jeddah')
+      .replace(/\bjidda\b/g, 'jeddah')
       .replace(/\b(university|of|the|and|&)\b/g, ' ')
       .replace(/\s+/g, ' ').trim();
 
@@ -365,15 +370,22 @@
         if (normalizeUnivName(key) === qNorm) return rank;
       }
 
-      // 3. Substring match (longer key contains query or vice versa)
+      // 3. Strict substring match — only if lengths are close (within 30%)
+      // This prevents "King Saud University" from matching "King Saud bin Abdulaziz University"
       for (const [key, rank] of Object.entries(qsDb)) {
-        if (key.includes(q) || q.includes(key)) return rank;
+        const shorter = q.length < key.length ? q : key;
+        const longer  = q.length < key.length ? key : q;
+        const ratio   = shorter.length / longer.length;
+        if (ratio >= 0.7 && longer.includes(shorter)) return rank;
       }
 
-      // 4. Normalized substring match
+      // 4. Normalized substring match — also length-ratio gated
       for (const [key, rank] of Object.entries(qsDb)) {
-        const kNorm = normalizeUnivName(key);
-        if (kNorm.includes(qNorm) || qNorm.includes(kNorm)) return rank;
+        const kNorm   = normalizeUnivName(key);
+        const shorter = qNorm.length < kNorm.length ? qNorm : kNorm;
+        const longer  = qNorm.length < kNorm.length ? kNorm : qNorm;
+        const ratio   = shorter.length / longer.length;
+        if (ratio >= 0.7 && longer.includes(shorter)) return rank;
       }
 
       // 5. Word-overlap scoring — all significant words must match
@@ -480,27 +492,25 @@
         return () => document.removeEventListener('mousedown', handler);
       }, []);
 
-      /* University global search */
+      /* University search — QS database only */
       useEffect(() => {
-        if (!debouncedSearch || debouncedSearch.length <= 2 || !showSuggestions) {
+        if (!debouncedSearch || debouncedSearch.length <= 1 || !showSuggestions) {
           setSuggestions([]); return;
         }
-        const doSearch = (data) => {
-          const term  = debouncedSearch.toLowerCase();
-          const hits  = data.filter(u => u.name.toLowerCase().includes(term));
-          const unique = Array.from(new Set(hits.map(a => a.name)))
-            .map(name => hits.find(a => a.name === name))
-            .slice(0, 7);
-          setSuggestions(unique);
-          setIsSearchingUniv(false);
-        };
-        if (_univCache) { doSearch(_univCache); return; }
-        setIsSearchingUniv(true);
-        fetch('https://raw.githubusercontent.com/Hipo/university-domains-list/master/world_universities_and_domains.json')
-          .then(r => r.json())
-          .then(data => { _univCache = data; doSearch(data); })
-          .catch(err => { console.error(err); setIsSearchingUniv(false); });
-      }, [debouncedSearch, showSuggestions]);
+        if (!qsDb) { setSuggestions([]); return; }
+
+        const term = debouncedSearch.toLowerCase().trim();
+        const results = [];
+        for (const [key, rank] of Object.entries(qsDb)) {
+          if (key.includes(term)) {
+            // Restore proper casing: capitalize each word
+            const displayName = key.replace(/\b\w/g, c => c.toUpperCase());
+            results.push({ name: displayName, _qsKey: key, _qsRank: rank });
+            if (results.length >= 8) break;
+          }
+        }
+        setSuggestions(results);
+      }, [debouncedSearch, showSuggestions, qsDb]);
 
       /* ── QS Upload (CSV or XLSX) ───────────────────────────────────── */
       const [showGithubModal, setShowGithubModal] = useState(false);
@@ -662,24 +672,18 @@
       };
 
       const selectSuggestion = (univ) => {
-        const domain = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
-        // QS lookup from uploaded CSV
-        const rank = lookupRank(qsDb, univ.name);
+        // Use exact rank and name directly from QS data
+        const rank = univ._qsRank || '';
         setFormData(prev => ({
           ...prev,
           universityName: univ.name,
-          country:   univ.country || '',
-          cityState: univ['state-province'] || '',
-          qsRanking: rank || '',
-          logoUrl:   domain ? `https://logo.clearbit.com/${domain}` : ''
+          qsRanking: rank,
         }));
         setShowSuggestions(false);
-        if (rank) {
+        if (rank && rank !== 'N/A') {
           showToast(`✅ QS Rank found: ${rank}`);
-        } else if (qsDb) {
-          showToast('Rank not found in QS database. You can enter it manually.', 'warn');
         } else {
-          showToast('No QS database loaded. Upload a QS CSV for auto-rank.', 'warn');
+          showToast('Rank not found in QS database. You can enter it manually.', 'warn');
         }
       };
 
@@ -919,7 +923,7 @@
           <main style={{ maxWidth: '760px', margin: '0 auto', padding: '28px 16px' }}>
 
             {/* Action bar */}
-            <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+            <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
               <div>
                 <h2 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '22px', color: 'var(--text)', margin: 0 }}>
                   Application Dashboard
@@ -928,7 +932,7 @@
                   QS CSV lookup · Logo detection · Cloud sync
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" ref={fileInputRef} onChange={handleImportCSV} style={{ display: 'none' }} />
                 <label htmlFor="csv-file-input" className="btn-ghost" style={{ cursor: 'pointer' }}>
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -982,9 +986,9 @@
                 </div>
               ) : (
                 /* Not loaded state */
-                <div className="qs-banner" style={{ marginBottom: '20px' }}>
+                <div className="qs-banner" style={{ marginBottom: '20px', flexWrap: 'wrap' }}>
                   <div className="qs-banner-icon">📊</div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: '160px' }}>
                     <div style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '13px', color: '#3730a3' }}>
                       Upload QS Rankings CSV for Auto Rank
                     </div>
@@ -992,7 +996,7 @@
                       Download once from topuniversities.com · Works offline · No API needed
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                     <button onClick={() => setShowGuide(true)} style={{ fontSize: '11px', color: '#5b4fff', background: 'white', border: '1.5px solid #c7d2fe', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
                       📖 How?
                     </button>
@@ -1069,7 +1073,7 @@
                         <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
-                        Live Global Search
+                        {qsDb ? 'Search from QS Database' : 'Upload QS data to search'}
                       </span>
                     </label>
                     <div style={{ position: 'relative' }}>
@@ -1081,7 +1085,7 @@
                         onFocus={() => setShowSuggestions(true)}
                         className="input-field"
                         style={{ paddingRight: formData.universityName ? '40px' : '16px' }}
-                        placeholder="Type to search globally…"
+                        placeholder={qsDb ? "Type to search from QS database…" : "Enter university name manually"}
                         required
                         autoComplete="off"
                       />
@@ -1096,11 +1100,6 @@
                           </svg>
                         </button>
                       )}
-                      {isSearchingUniv && (
-                        <div style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)' }}>
-                          <div className="spinner"></div>
-                        </div>
-                      )}
                     </div>
 
                     {/* Suggestions dropdown */}
@@ -1111,33 +1110,24 @@
                         boxShadow: '0 12px 40px rgba(91,79,255,0.15)', overflow: 'hidden', zIndex: 999,
                         maxHeight: '280px', overflowY: 'auto'
                       }}>
-                        {suggestions.map((univ, idx) => {
-                          const domain  = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
-                          const tmpLogo = domain ? `https://logo.clearbit.com/${domain}` : null;
-                          const csvRank = lookupRank(qsDb, univ.name);
-                          return (
-                            <div key={idx} className="suggestion-item" onClick={() => selectSuggestion(univ)}>
-                              <div style={{
-                                width: 36, height: 36, borderRadius: '10px',
-                                background: 'var(--surface-2)', flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                overflow: 'hidden', border: '1px solid var(--border)'
-                              }}>
-                                {tmpLogo
-                                  ? <img src={tmpLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.style.display='none'}/>
-                                  : <svg width="16" height="16" fill="var(--text-2)" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"/></svg>
-                                }
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{univ.name}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '2px', display: 'flex', gap: '8px' }}>
-                                  <span>📍 {[univ['state-province'], univ.country].filter(Boolean).join(', ')}</span>
-                                  {csvRank && <span style={{ color: '#d97706', fontWeight: 700 }}>⭐ QS {csvRank}</span>}
-                                </div>
-                              </div>
+                        {suggestions.map((univ, idx) => (
+                          <div key={idx} className="suggestion-item" onClick={() => selectSuggestion(univ)}>
+                            <div style={{
+                              width: 36, height: 36, borderRadius: '10px',
+                              background: 'var(--surface-2)', flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              border: '1px solid var(--border)'
+                            }}>
+                              <svg width="16" height="16" fill="var(--text-2)" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"/></svg>
                             </div>
-                          );
-                        })}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{univ.name}</div>
+                              {univ._qsRank && univ._qsRank !== 'N/A' && (
+                                <div style={{ fontSize: '11px', color: '#d97706', fontWeight: 700, marginTop: '2px' }}>⭐ QS #{univ._qsRank}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
