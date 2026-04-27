@@ -345,15 +345,50 @@
       return db;
     };
 
+    // Normalize: remove punctuation, extra spaces, common suffixes for better matching
+    const normalizeUnivName = (s) => s.toLowerCase().trim()
+      .replace(/[''`]/g, "'")
+      .replace(/[^a-z0-9\s']/g, ' ')
+      .replace(/\b(university|of|the|and|&)\b/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+
     const lookupRank = (qsDb, univName) => {
       if (!qsDb || !univName) return null;
       const q = univName.toLowerCase().trim();
-      // Exact match
+      const qNorm = normalizeUnivName(univName);
+
+      // 1. Exact match
       if (qsDb[q]) return qsDb[q];
-      // Partial match — find the closest key that includes our query or vice versa
-      for (const key of Object.keys(qsDb)) {
-        if (key.includes(q) || q.includes(key)) return qsDb[key];
+
+      // 2. Normalized exact match
+      for (const [key, rank] of Object.entries(qsDb)) {
+        if (normalizeUnivName(key) === qNorm) return rank;
       }
+
+      // 3. Substring match (longer key contains query or vice versa)
+      for (const [key, rank] of Object.entries(qsDb)) {
+        if (key.includes(q) || q.includes(key)) return rank;
+      }
+
+      // 4. Normalized substring match
+      for (const [key, rank] of Object.entries(qsDb)) {
+        const kNorm = normalizeUnivName(key);
+        if (kNorm.includes(qNorm) || qNorm.includes(kNorm)) return rank;
+      }
+
+      // 5. Word-overlap scoring — all significant words must match
+      const qWords = qNorm.split(' ').filter(w => w.length > 2);
+      if (qWords.length > 0) {
+        let bestKey = null, bestScore = 0;
+        for (const [key, rank] of Object.entries(qsDb)) {
+          const kWords = normalizeUnivName(key).split(' ').filter(w => w.length > 2);
+          const matches = qWords.filter(w => kWords.includes(w)).length;
+          const score = matches / Math.max(qWords.length, kWords.length);
+          if (score > bestScore && score >= 0.75) { bestScore = score; bestKey = key; }
+        }
+        if (bestKey) return qsDb[bestKey];
+      }
+
       return null;
     };
 
@@ -483,7 +518,7 @@
       const applyQsDb = (db, fileName) => {
         const count = Object.keys(db).length;
         if (count === 0) {
-          showToast('❌ QS data পড়া যায়নি। Format চেক করুন।', 'error');
+          showToast('❌ Could not read QS data. Check the file format.', 'error');
           return false;
         }
         setQsDb(db);
@@ -499,21 +534,42 @@
         const wb = XLSX.read(arrayBuffer, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (rows.length < 2) return {};
-        const header = rows[0].map(c => String(c).toLowerCase().trim());
-        let nameIdx = -1, rankIdx = -1;
-        header.forEach((c, i) => {
-          if (nameIdx === -1 && (c.includes('institution') || c.includes('university') || c.includes('name'))) nameIdx = i;
-          if (rankIdx === -1 && (c.includes('rank') || c === '#' || c === 'rank_display' || c === '2025' || c === '2026')) rankIdx = i;
-        });
-        if (nameIdx === -1) nameIdx = 1;
-        if (rankIdx === -1) rankIdx = 0;
+        if (rows.length < 3) return {};
+
+        // ── Find the true header row (the one containing "name" or "rank") ──
+        // QS 2026 format: row 0 = title, row 1 = group headers, row 2 = sub-headers (Index/Rank/Name...)
+        let headerRowIdx = 0;
+        for (let i = 0; i < Math.min(6, rows.length); i++) {
+          const cells = rows[i].map(c => String(c).toLowerCase().trim());
+          const hasName = cells.some(c => c === 'name' || c === 'institution');
+          const hasRank = cells.some(c => c === 'rank' || c === '2026' || c === '2025');
+          if (hasName || hasRank) { headerRowIdx = i; break; }
+        }
+
+        const header = rows[headerRowIdx].map(c => String(c).toLowerCase().trim());
+
+        // Find name column: look for exact 'name' or 'institution' first
+        let nameIdx = header.findIndex(c => c === 'name' || c === 'institution');
+        if (nameIdx === -1) nameIdx = header.findIndex(c => c.includes('name') || c.includes('institution') || c.includes('university'));
+
+        // Find rank column: prefer the first numeric-year column (2026, 2025) or 'rank'
+        let rankIdx = header.findIndex(c => c === '2026' || c === '2025');
+        if (rankIdx === -1) rankIdx = header.findIndex(c => c === 'rank');
+        if (rankIdx === -1) rankIdx = header.findIndex(c => c.includes('rank'));
+
+        // Hard fallback for QS standard format (confirmed: col1=Rank, col3=Name)
+        if (rankIdx === -1) rankIdx = 1;
+        if (nameIdx === -1) nameIdx = 3;
+
         const db = {};
-        for (let i = 1; i < rows.length; i++) {
+        for (let i = headerRowIdx + 1; i < rows.length; i++) {
           const row = rows[i];
-          const name = String(row[nameIdx] || '').trim().toLowerCase();
-          const rank = String(row[rankIdx] || '').trim();
-          if (name) db[name] = rank || 'N/A';
+          const rawName = String(row[nameIdx] || '').trim();
+          const rawRank = String(row[rankIdx] || '').trim();
+          // Skip empty or header-like rows
+          if (!rawName || rawName.toLowerCase() === 'name' || rawName.toLowerCase() === 'institution') continue;
+          if (rawName.length < 3) continue;
+          db[rawName.toLowerCase()] = rawRank || 'N/A';
         }
         return db;
       };
@@ -552,7 +608,7 @@
             setShowGithubModal(false);
           }
         } catch (err) {
-          showToast('❌ লোড হয়নি। Repo name ঠিক আছে? qsdata.xlsx আছে? jsDelivr cache ~10 min লাগতে পারে।', 'error');
+          showToast('❌ Failed to load. Check repo name and that qsdata.xlsx exists. jsDelivr may take ~10 min to cache.', 'error');
         } finally {
           setIsLoadingGithub(false);
         }
@@ -570,7 +626,7 @@
           const repoClean = githubRepo.trim().replace(/^https?:\/\/github\.com\//, '');
           applyQsDb(db, `qsdata.xlsx (${repoClean})`);
         } catch {
-          showToast('❌ Reload হয়নি। jsDelivr cache ~10 min লাগতে পারে।', 'error');
+          showToast('❌ Reload failed. jsDelivr may take ~10 min to cache new files.', 'error');
         } finally {
           setIsLoadingGithub(false);
         }
@@ -789,11 +845,11 @@
             if (lines.length < 2) return showToast('Invalid or empty file.', 'error');
             rows = lines.map(line => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
           }
-          if (!rows || rows.length < 2) return showToast('ফাইলে কোনো data নেই।', 'error');
+          if (!rows || rows.length < 2) return showToast('File is empty or invalid.', 'error');
           const imported = parseImportedRows(rows);
-          if (!imported.length) return showToast('কোনো valid row পাওয়া যায়নি।', 'error');
+          if (!imported.length) return showToast('No valid rows found in file.', 'error');
           setPreferences(sortByRank([...preferences, ...imported]));
-          showToast(`✅ ${imported.length}টি program import হয়েছে!`);
+          showToast(`✅ ${imported.length} programs imported!`);
           e.target.value = null;
         };
         if (isXlsx) reader.readAsArrayBuffer(file);
@@ -914,8 +970,7 @@
                     </div>
                     <div style={{ fontSize: '11px', color: '#059669', marginTop: '2px' }}>
                       {qsDbMeta?.fileName} · Rank auto-fills when you select a university
-                    </div>
-                  </div>
+                    </div>                  </div>
                   <button onClick={clearQsDb} style={{ fontSize: '11px', color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
                     Remove
                   </button>
@@ -1424,10 +1479,10 @@
 
                 <div style={{ fontSize: '28px', marginBottom: '8px' }}>🐙</div>
                 <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', marginBottom: '4px', color: 'var(--text)' }}>
-                  GitHub দিয়ে QS Data Manage করো
+                  Manage QS Data via GitHub
                 </h3>
                 <p style={{ fontSize: '12.5px', color: 'var(--text-2)', marginBottom: '20px', lineHeight: 1.6 }}>
-                  একবার setup করলে শুধু GitHub এ file replace করলেই হবে — সব user এর কাছে automatically নতুন data যাবে।
+                  Set up once — just replace the file on GitHub and all users get updated data automatically.
                 </p>
 
                 {/* Steps */}
@@ -1435,9 +1490,9 @@
                   <div className="step-row">
                     <div className="step-num">1</div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>GitHub এ একটা Repository তৈরি করো</div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Create a GitHub Repository</div>
                       <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        <a href="https://github.com/new" target="_blank" style={{ color: 'var(--accent)', fontWeight: 600 }}>github.com/new</a> এ যাও → Repository name দাও (যেমন <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>studytrack-data</code>) → <strong>Public</strong> রাখো → Create করো
+                        Go to <a href="https://github.com/new" target="_blank" style={{ color: 'var(--accent)', fontWeight: 600 }}>github.com/new</a> → Enter a name (e.g. <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>studytrack-data</code>) → Set to <strong>Public</strong> → Create
                       </div>
                     </div>
                   </div>
@@ -1445,9 +1500,9 @@
                   <div className="step-row">
                     <div className="step-num">2</div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>QS data file টা <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>qsdata.xlsx</code> নামে save করো</div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Rename your QS file to <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>qsdata.xlsx</code></div>
                       <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        topuniversities.com থেকে download করা file এর নাম <strong>qsdata.xlsx</strong> করো। এই exact নামটাই লাগবে।
+                        Rename the file downloaded from topuniversities.com to exactly <strong>qsdata.xlsx</strong> — this exact name is required.
                       </div>
                     </div>
                   </div>
@@ -1455,9 +1510,9 @@
                   <div className="step-row">
                     <div className="step-num">3</div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Repository তে file upload করো</div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Upload the file to your repository</div>
                       <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        Repo page এ <strong>"Add file → Upload files"</strong> click করো → <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>qsdata.xlsx</code> drag করো → <strong>Commit changes</strong> করো
+                        On the repo page click <strong>"Add file → Upload files"</strong> → drag <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>qsdata.xlsx</code> → click <strong>Commit changes</strong>
                       </div>
                     </div>
                   </div>
@@ -1465,9 +1520,9 @@
                   <div className="step-row" style={{ borderBottom: 'none' }}>
                     <div className="step-num">4</div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>নিচে শুধু <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>username/repo</code> দাও</div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Enter your <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>username/repo</code> below</div>
                       <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        GitHub username আর repository name — এটুকুই লাগবে। বাকিটা app নিজে করবে।
+                        Just your GitHub username and repo name — the app handles the rest.
                       </div>
                     </div>
                   </div>
@@ -1477,7 +1532,7 @@
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '12px 14px', marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                   <div style={{ fontSize: '16px', marginTop: '1px' }}>🔄</div>
                   <div style={{ fontSize: '12px', color: '#065f46', lineHeight: 1.6 }}>
-                    <strong>পরের বছর update করতে:</strong> GitHub এ নতুন <code style={{ background: '#bbf7d0', padding: '1px 5px', borderRadius: '4px' }}>qsdata.xlsx</code> upload করো (same নামে replace) → app এ <strong>Reload</strong> button চাপো। ব্যস!
+                    <strong>To update next year:</strong> Upload the new <code style={{ background: '#bbf7d0', padding: '1px 5px', borderRadius: '4px' }}>qsdata.xlsx</code> to GitHub (replacing the old file) → hit <strong>Reload</strong> in the app. Done!
                   </div>
                 </div>
 
@@ -1500,7 +1555,7 @@
                   />
                 </div>
                 <div style={{ fontSize: '11.5px', color: 'var(--text-2)', marginBottom: '20px' }}>
-                  ⚡ jsDelivr CDN ব্যবহার করে — unlimited requests, no rate limit
+                  ⚡ Uses jsDelivr CDN — unlimited requests, no rate limit
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1554,10 +1609,10 @@
 
                 <div style={{ fontSize: '28px', marginBottom: '8px' }}>📊</div>
                 <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', marginBottom: '4px', color: 'var(--text)' }}>
-                  How to Get QS Rankings CSV
+                  How to Get QS Rankings Data
                 </h3>
                 <p style={{ fontSize: '12.5px', color: 'var(--text-2)', marginBottom: '20px' }}>
-                  একবার download করলে প্রতি বছর নতুন file upload করলেই সব rank update হবে।
+                  Download once — upload a new file each year and all ranks update automatically.
                 </p>
 
                 <div>
@@ -1565,10 +1620,10 @@
                     <div className="step-num">1</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        topuniversities.com এ যাও
+                        Go to topuniversities.com
                       </div>
                       <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Browser এ এই লিংক খোলো:
+                        Open this link in your browser:
                       </div>
                       <a href="https://www.topuniversities.com/world-university-rankings" target="_blank"
                         style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600, wordBreak: 'break-all' }}>
@@ -1581,12 +1636,12 @@
                     <div className="step-num">2</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        "Download Data" বাটন খোঁজো
+                        Find the "Download Data" button
                       </div>
                       <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Rankings table এর উপরে বা নিচে <strong>"Download"</strong> বা <strong>"Export CSV"</strong> বাটন থাকে। সেটায় ক্লিক করো।
+                        Look for a <strong>"Download"</strong> or <strong>"Export"</strong> button above or below the rankings table and click it.
                         <br/><br/>
-                        ⚠️ Free account লাগতে পারে — register করো (free)।
+                        ⚠️ A free account may be required — registration is free.
                       </div>
                     </div>
                   </div>
@@ -1595,10 +1650,10 @@
                     <div className="step-num">3</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        CSV file save করো
+                        Save the file
                       </div>
                       <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Download হওয়া file টা তোমার Phone বা PC তে save করো। যেকোনো folder এ রাখতে পারো।
+                        Save the downloaded file anywhere on your phone or PC.
                       </div>
                     </div>
                   </div>
@@ -1607,12 +1662,12 @@
                     <div className="step-num">4</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        এই app এ Upload করো
+                        Upload it here
                       </div>
                       <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Banner এ <strong>"⬆ Upload CSV"</strong> button এ click করো। File select করলেই automatically সব university র rank load হবে।
+                        Click <strong>"⬆ CSV/XLSX"</strong> in the banner and select the file. All university ranks will load instantly.
                         <br/><br/>
-                        এরপর থেকে যেকোনো university search করলে rank <strong>automatically</strong> fill হয়ে যাবে!
+                        From then on, rank fills in <strong>automatically</strong> whenever you search for a university!
                       </div>
                     </div>
                   </div>
@@ -1621,10 +1676,10 @@
                     <div style={{ fontSize: '20px' }}>🔄</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '13px', color: '#065f46', marginBottom: '4px' }}>
-                        প্রতি বছর update করতে
+                        Updating each year
                       </div>
                       <div style={{ fontSize: '12px', color: '#059669', lineHeight: '1.5' }}>
-                        New QS rankings আসলে শুধু নতুন CSV download করে আবার upload করো। আগের সব data আপনাআপনি update হয়ে যাবে।
+                        When new QS rankings are released, just download the new file and upload it again. All data updates automatically.
                       </div>
                     </div>
                   </div>
