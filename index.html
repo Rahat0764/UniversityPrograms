@@ -502,7 +502,7 @@
       }, [debouncedSearch, showSuggestions, qsDb]);
 
       /* ── QS Auto-fetch from GitHub on page load ───────────────────── */
-      const QS_CDN_URL = 'https://cdn.jsdelivr.net/gh/Rahat0764/UniversityPrograms@main/qsdata.xlsx';
+      const QS_CDN_URL = 'https://gdrive.rahatx.workers.dev/0:down/Sheets/qsdata.xlsx';
 
       const parseQSXlsx = (arrayBuffer) => {
         const wb = XLSX.read(arrayBuffer, { type: 'array' });
