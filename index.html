@@ -5,36 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Premium Study Tracker - Secure Cloud Sync</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- LZ-String for URL Compression -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-
-  <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+
     @media print {
       body { background-color: white !important; }
       .print-hidden { display: none !important; }
-      .print-card { box-shadow: none !important; border-bottom: 1px solid #e2e8f0 !important; border-radius: 0 !important; break-inside: avoid; margin-bottom: 20px; padding: 10px 0 !important; }
+      .print-card {
+        box-shadow: none !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        border-radius: 0 !important;
+        break-inside: avoid;
+        margin-bottom: 20px;
+        padding: 10px 0 !important;
+      }
     }
+
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    
+
     .glass-effect {
-      background: rgba(255, 255, 255, 0.90);
+      background: rgba(255,255,255,0.90);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
     }
@@ -43,11 +43,13 @@
       border: 2px solid #e2e8f0;
       border-top: 2px solid #4f46e5;
       border-radius: 50%;
-      width: 16px;
-      height: 16px;
+      width: 16px; height: 16px;
       animation: spin 1s linear infinite;
     }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+
+    /* ✅ FIX: label-as-button needs pointer cursor */
+    label.btn-label { cursor: pointer; }
   </style>
 </head>
 <body class="text-slate-800 antialiased selection:bg-indigo-200 selection:text-indigo-900">
@@ -56,6 +58,7 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    /* ─── Helpers ──────────────────────────────────────────────────────────── */
     const parseRank = (rank) => {
       if (!rank || rank.toString().toUpperCase() === 'N/A') return Infinity;
       const match = rank.toString().match(/\d+/);
@@ -63,18 +66,29 @@
     };
 
     function useDebounce(value, delay) {
-      const [debouncedValue, setDebouncedValue] = useState(value);
+      const [dv, setDv] = useState(value);
       useEffect(() => {
-        const handler = setTimeout(() => { setDebouncedValue(value); }, delay);
-        return () => { clearTimeout(handler); };
+        const h = setTimeout(() => setDv(value), delay);
+        return () => clearTimeout(h);
       }, [value, delay]);
-      return debouncedValue;
+      return dv;
     }
 
+    // ✅ FIX: Module-level cache so the ~5 MB JSON is fetched only ONCE per page load
+    let _univCache = null;
+
+    /* ─── App ──────────────────────────────────────────────────────────────── */
     const App = () => {
+
+      // ✅ FIX: Wrap JSON.parse in try/catch — corrupted data used to crash the app
       const [preferences, setPreferences] = useState(() => {
-        const savedData = localStorage.getItem('studyTrackerV5');
-        return savedData ? JSON.parse(savedData) : [];
+        try {
+          const saved = localStorage.getItem('studyTrackerV5');
+          return saved ? JSON.parse(saved) : [];
+        } catch {
+          localStorage.removeItem('studyTrackerV5');
+          return [];
+        }
       });
 
       const [formData, setFormData] = useState({
@@ -87,271 +101,295 @@
         duration: '4 Years',
         language: 'English',
         customLanguage: '',
-        logoUrl: '' 
+        logoUrl: ''
       });
 
-      const [editingId, setEditingId] = useState(null);
-      const [editFormData, setEditFormData] = useState({});
-      const [showSyncModal, setShowSyncModal] = useState(false);
-      const [syncLink, setSyncLink] = useState('');
-      const [toast, setToast] = useState(null);
-      
-      const [suggestions, setSuggestions] = useState([]);
-      const [isSearchingUniv, setIsSearchingUniv] = useState(false);
-      const [showSuggestions, setShowSuggestions] = useState(false);
-      const [isFetchingQS, setIsFetchingQS] = useState(false);
-      
+      const [editingId,   setEditingId]   = useState(null);
+      const [editFormData,setEditFormData] = useState({});
+      const [showSyncModal,setShowSyncModal] = useState(false);
+      const [syncLink,    setSyncLink]    = useState('');
+      const [toast,       setToast]       = useState(null);
+
+      const [suggestions,      setSuggestions]      = useState([]);
+      const [isSearchingUniv,  setIsSearchingUniv]  = useState(false);
+      const [showSuggestions,  setShowSuggestions]  = useState(false);
+      const [isFetchingQS,     setIsFetchingQS]     = useState(false);
+
       const suggestionRef = useRef(null);
-      const fileInputRef = useRef(null);
+      const fileInputRef  = useRef(null);
 
-      const debouncedSearchTerm = useDebounce(formData.universityName, 500);
+      const debouncedSearch = useDebounce(formData.universityName, 500);
 
-      // Auto-save to LocalStorage
+      /* Auto-save */
       useEffect(() => {
         localStorage.setItem('studyTrackerV5', JSON.stringify(preferences));
       }, [preferences]);
 
-      // Cloud Sync Restore
+      /* Cloud Sync Restore */
       useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const syncData = urlParams.get('s'); 
+        const params   = new URLSearchParams(window.location.search);
+        const syncData = params.get('s');
         if (syncData) {
           try {
-            const decompressed = LZString.decompressFromEncodedURIComponent(syncData);
-            const decoded = JSON.parse(decompressed);
+            const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(syncData));
             if (Array.isArray(decoded)) {
               setPreferences(decoded);
               showToast('✅ Data restored from Cloud Link successfully!');
               window.history.replaceState(null, '', window.location.pathname);
             }
-          } catch(e) {
+          } catch {
             showToast('❌ Invalid or corrupted sync link.', 'error');
           }
         }
       }, []);
 
-      // Close suggestions on outside click
+      /* Close suggestions on outside click */
       useEffect(() => {
-        const handleClickOutside = (event) => {
-          if (suggestionRef.current && !suggestionRef.current.contains(event.target)) {
+        const handler = (e) => {
+          if (suggestionRef.current && !suggestionRef.current.contains(e.target))
             setShowSuggestions(false);
-          }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
       }, []);
 
-      const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4000);
-      };
-
-      // --- 1. Global University Search (Frontend via Free API) ---
+      /* ✅ FIX: University search with in-memory cache (no repeated 5 MB downloads) */
       useEffect(() => {
-        if (debouncedSearchTerm && debouncedSearchTerm.length > 2 && showSuggestions) {
-          setIsSearchingUniv(true);
-          fetch(`https://raw.githubusercontent.com/Hipo/university-domains-list/master/world_universities_and_domains.json`)
-            .then(res => res.json())
-            .then(data => {
-              const term = debouncedSearchTerm.toLowerCase();
-              const filtered = data.filter(u => u.name.toLowerCase().includes(term));
-              const uniqueUnivs = Array.from(new Set(filtered.map(a => a.name)))
-                .map(name => filtered.find(a => a.name === name))
-                .slice(0, 8); 
-              setSuggestions(uniqueUnivs);
-              setIsSearchingUniv(false);
-            })
-            .catch(err => {
-              console.error(err);
-              setIsSearchingUniv(false);
-            });
-        } else {
+        if (!debouncedSearch || debouncedSearch.length <= 2 || !showSuggestions) {
           setSuggestions([]);
+          return;
         }
-      }, [debouncedSearchTerm, showSuggestions]);
+        const doSearch = (data) => {
+          const term   = debouncedSearch.toLowerCase();
+          const hits   = data.filter(u => u.name.toLowerCase().includes(term));
+          const unique = Array.from(new Set(hits.map(a => a.name)))
+            .map(name => hits.find(a => a.name === name))
+            .slice(0, 8);
+          setSuggestions(unique);
+          setIsSearchingUniv(false);
+        };
 
-      // --- 2. Secure QS Ranking Fetch (Calls Vercel Backend `/api/qs`) ---
+        if (_univCache) {
+          doSearch(_univCache);
+        } else {
+          setIsSearchingUniv(true);
+          fetch('https://raw.githubusercontent.com/Hipo/university-domains-list/master/world_universities_and_domains.json')
+            .then(r => r.json())
+            .then(data => { _univCache = data; doSearch(data); })
+            .catch(err => { console.error(err); setIsSearchingUniv(false); });
+        }
+      }, [debouncedSearch, showSuggestions]);
+
+      /* ─── QS Rank fetch ─────────────────────────────────────────────────── */
+      // ✅ FIX: Don't overwrite a rank the user has already typed manually
       const fetchLiveQSRank = async (univName) => {
         setIsFetchingQS(true);
         try {
-          // Calling the Secure Serverless Function
           const response = await fetch(`/api/qs?univ=${encodeURIComponent(univName)}`);
-          if (!response.ok) throw new Error('API Error');
-          
-          const data = await response.json();
+          const data     = await response.json();
+
+          // ✅ FIX: backend now returns null on failure (not 'N/A'), check accordingly
           if (data.rank) {
-            setFormData(prev => ({ ...prev, qsRanking: data.rank }));
-            showToast(`🎯 QS Rank (${data.rank}) fetched automatically!`);
+            setFormData(prev => {
+              // Only auto-fill if user hasn't typed something themselves
+              if (!prev.qsRanking) {
+                showToast(`🎯 QS Rank (${data.rank}) fetched automatically!`);
+                return { ...prev, qsRanking: data.rank };
+              }
+              return prev;
+            });
           } else {
             showToast('Automatic rank not found. Please input manually.', 'error');
           }
-        } catch (error) {
-          console.error("Backend fetch error:", error);
+        } catch {
           showToast('Could not fetch rank. Please input manually.', 'error');
         } finally {
           setIsFetchingQS(false);
         }
       };
 
+      /* ─── Helpers ───────────────────────────────────────────────────────── */
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
       const extractDomain = (url) => {
         if (!url) return null;
-        try { return new URL(url).hostname.replace('www.', ''); } catch (e) { return null; }
+        try { return new URL(url).hostname.replace('www.', ''); } catch { return null; }
+      };
+
+      const sortByRank = (list) =>
+        [...list].sort((a, b) => parseRank(a.qsRanking) - parseRank(b.qsRanking));
+
+      /* ─── Form handlers ─────────────────────────────────────────────────── */
+      const handleAddInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'universityName') setShowSuggestions(true);
       };
 
       const selectSuggestion = (univ) => {
         const domain = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
-        const logo = domain ? `https://logo.clearbit.com/${domain}` : '';
-        
         setFormData(prev => ({
           ...prev,
           universityName: univ.name,
-          country: univ.country || '',
+          country:   univ.country           || '',
           cityState: univ['state-province'] || '',
-          qsRanking: '',
-          logoUrl: logo
+          qsRanking: '',          // clear so auto-fetch can fill it
+          logoUrl:   domain ? `https://logo.clearbit.com/${domain}` : ''
         }));
         setShowSuggestions(false);
-        fetchLiveQSRank(univ.name); // Trigger backend fetch securely
-      };
-
-      const handleAddInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-        if(e.target.name === 'universityName') setShowSuggestions(true);
-      };
-
-      const sortPreferencesByRank = (list) => {
-        return [...list].sort((a, b) => parseRank(a.qsRanking) - parseRank(b.qsRanking));
+        fetchLiveQSRank(univ.name);
       };
 
       const handleAddProgram = (e) => {
         e.preventDefault();
         if (!formData.universityName || !formData.programName) return;
-        
-        let finalLanguage = formData.language === 'Others' ? (formData.customLanguage || 'Not Specified') : formData.language;
 
-        const newPreference = {
-          id: Date.now().toString(),
-          degreeType: formData.degreeType,
+        const finalLang = formData.language === 'Others'
+          ? (formData.customLanguage || 'Not Specified')
+          : formData.language;
+
+        const newPref = {
+          id:             Date.now().toString(),
+          degreeType:     formData.degreeType,
           universityName: formData.universityName,
-          qsRanking: formData.qsRanking || 'N/A',
-          cityState: formData.cityState,
-          country: formData.country,
-          programName: formData.programName,
-          duration: formData.duration,
-          language: finalLanguage,
-          logoUrl: formData.logoUrl
+          qsRanking:      formData.qsRanking || 'N/A',
+          cityState:      formData.cityState,
+          country:        formData.country,
+          programName:    formData.programName,
+          duration:       formData.duration,
+          language:       finalLang,
+          logoUrl:        formData.logoUrl
         };
 
-        const updatedList = sortPreferencesByRank([...preferences, newPreference]);
-        setPreferences(updatedList);
-        
-        setFormData(prev => ({ ...prev, programName: '', universityName: '', qsRanking: '', cityState: '', country: '', logoUrl: '' }));
+        setPreferences(sortByRank([...preferences, newPref]));
+        setFormData(prev => ({
+          ...prev,
+          programName: '', universityName: '',
+          qsRanking: '', cityState: '', country: '', logoUrl: ''
+        }));
         showToast('✅ Program added and sorted by ranking!');
       };
 
-      // Edit & Delete Handlers
+      /* ─── Edit / Delete ─────────────────────────────────────────────────── */
+      // ✅ FIX: Bilingual (Ar+En) is now a recognised standard language in edit mode
+      const STANDARD_LANGS = ['English', 'Arabic', 'Bilingual (Ar+En)'];
+
       const startEditing = (pref) => {
         setEditingId(pref.id);
-        let isStandardLang = ['English', 'Arabic', 'Bilingual (Ar+En)'].includes(pref.language);
+        const isStd = STANDARD_LANGS.includes(pref.language);
         setEditFormData({
           ...pref,
-          language: isStandardLang ? pref.language : 'Others',
-          customLanguage: isStandardLang ? '' : pref.language
+          language:       isStd ? pref.language : 'Others',
+          customLanguage: isStd ? '' : pref.language
         });
       };
 
       const saveEdit = () => {
-        let finalLanguage = editFormData.language === 'Others' ? (editFormData.customLanguage || 'Not Specified') : editFormData.language;
-        let updatedPreferences = preferences.map(p => 
-          p.id === editingId ? { ...editFormData, language: finalLanguage } : p
+        const finalLang = editFormData.language === 'Others'
+          ? (editFormData.customLanguage || 'Not Specified')
+          : editFormData.language;
+        const updated = preferences.map(p =>
+          p.id === editingId ? { ...editFormData, language: finalLang } : p
         );
-        setPreferences(sortPreferencesByRank(updatedPreferences));
+        setPreferences(sortByRank(updated));
         setEditingId(null);
         showToast('Changes saved successfully.');
       };
 
       const handleDelete = (id) => {
-        if(confirm("Are you sure you want to remove this program?")) {
-          setPreferences(preferences.filter(item => item.id !== id));
-        }
+        if (confirm('Are you sure you want to remove this program?'))
+          setPreferences(preferences.filter(p => p.id !== id));
       };
 
+      // ✅ Already existed, now wired to UI buttons below
       const movePreference = (index, direction) => {
-        const newPreferences = [...preferences];
-        if (direction === 'up' && index > 0) {
-          [newPreferences[index - 1], newPreferences[index]] = [newPreferences[index], newPreferences[index - 1]];
-        } else if (direction === 'down' && index < newPreferences.length - 1) {
-          [newPreferences[index + 1], newPreferences[index]] = [newPreferences[index], newPreferences[index + 1]];
-        }
-        setPreferences(newPreferences);
+        const arr = [...preferences];
+        if (direction === 'up' && index > 0)
+          [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
+        else if (direction === 'down' && index < arr.length - 1)
+          [arr[index + 1], arr[index]] = [arr[index], arr[index + 1]];
+        setPreferences(arr);
       };
 
       const handleSortClick = () => {
-        setPreferences(sortPreferencesByRank(preferences));
+        setPreferences(sortByRank(preferences));
         showToast('List sorted by QS Ranking.');
       };
 
+      /* ─── Cloud sync ────────────────────────────────────────────────────── */
       const generateCloudLink = () => {
         const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(preferences));
-        const url = `${window.location.origin}${window.location.pathname}?s=${compressed}`;
-        setSyncLink(url);
+        setSyncLink(`${window.location.origin}${window.location.pathname}?s=${compressed}`);
       };
 
+      /* ─── CSV Export ────────────────────────────────────────────────────── */
       const handleExportCSV = () => {
-        const headers = ["Rank", "Degree", "University Name", "QS World Ranking", "City/State", "Country", "Program Name", "Duration", "Language"];
-        const csvRows = preferences.map((p, index) => [
-          index + 1, p.degreeType, `"${p.universityName.replace(/"/g, '""')}"`, p.qsRanking, `"${(p.cityState || '').replace(/"/g, '""')}"`, `"${p.country.replace(/"/g, '""')}"`, `"${p.programName.replace(/"/g, '""')}"`, p.duration, p.language
-        ].join(","));
-        const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "Study_Track_QS_Data.csv";
+        const headers = ['Rank','Degree','University Name','QS World Ranking','City/State','Country','Program Name','Duration','Language'];
+        const rows    = preferences.map((p, i) => [
+          i + 1, p.degreeType,
+          `"${p.universityName.replace(/"/g,'""')}"`,
+          p.qsRanking,
+          `"${(p.cityState  || '').replace(/"/g,'""')}"`,
+          `"${(p.country    || '').replace(/"/g,'""')}"`,
+          `"${p.programName.replace(/"/g,'""')}"`,
+          p.duration, p.language
+        ].join(','));
+
+        const csv  = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href     = URL.createObjectURL(blob);
+        link.download = 'Study_Track_QS_Data.csv';
         link.click();
       };
 
+      /* ─── CSV Import ────────────────────────────────────────────────────── */
       const handleImportCSV = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (event) => {
-          const text = event.target.result;
-          const lines = text.split('\n').filter(line => line.trim() !== '');
+        reader.onload = (evt) => {
+          const lines = evt.target.result.split('\n').filter(l => l.trim());
           if (lines.length < 2) return showToast('Invalid or empty CSV file.', 'error');
-          
-          const importedPrefs = [];
+
+          const imported = [];
           for (let i = 1; i < lines.length; i++) {
             const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            if(row.length >= 7) {
-              const cleanStr = (str) => str ? str.replace(/^"|"$/g, '').trim() : '';
-              importedPrefs.push({
-                id: Date.now().toString() + i,
-                degreeType: cleanStr(row[1]) || 'Bachelor',
-                universityName: cleanStr(row[2]) || '',
-                qsRanking: cleanStr(row[3]) || 'N/A',
-                cityState: cleanStr(row[4]) || '',
-                country: cleanStr(row[5]) || '',
-                programName: cleanStr(row[6]) || '',
-                duration: cleanStr(row[7]) || '',
-                language: cleanStr(row[8]) || '',
-                logoUrl: ''
+            if (row.length >= 7) {
+              const c = (s) => s ? s.replace(/^"|"$/g, '').trim() : '';
+              imported.push({
+                id:             Date.now().toString() + i,
+                degreeType:     c(row[1]) || 'Bachelor',
+                universityName: c(row[2]) || '',
+                qsRanking:      c(row[3]) || 'N/A',
+                cityState:      c(row[4]) || '',
+                country:        c(row[5]) || '',
+                programName:    c(row[6]) || '',
+                duration:       c(row[7]) || '',
+                language:       c(row[8]) || '',
+                logoUrl:        ''
               });
             }
           }
-          const mergedList = sortPreferencesByRank([...preferences, ...importedPrefs]);
-          setPreferences(mergedList);
-          showToast(`✅ ${importedPrefs.length} programs imported!`);
+          setPreferences(sortByRank([...preferences, ...imported]));
+          showToast(`✅ ${imported.length} programs imported!`);
           e.target.value = null;
         };
         reader.readAsText(file);
       };
 
+      /* ══════════════════════════════════════════════════════════════════════
+         RENDER
+      ══════════════════════════════════════════════════════════════════════ */
       return (
         <div className="min-h-screen pb-24 relative">
-          
-          {/* Toast Notification */}
+
+          {/* Toast */}
           {toast && (
-            <div className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-[60] px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-sm transition-all duration-300 border ${toast.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-900 border-slate-700 text-white'}`}>
+            <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[60] px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-sm border ${toast.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-900 border-slate-700 text-white'}`}>
               {toast.type === 'error' ? '⚠️' : '✨'} {toast.message}
             </div>
           )}
@@ -361,89 +399,155 @@
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="bg-gradient-to-tr from-indigo-600 to-indigo-400 p-2.5 rounded-xl shadow-lg shadow-indigo-200">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 14l9-5-9-5-9 5 9 5z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 14l9-5-9-5-9 5 9 5z"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/>
+                  </svg>
                 </div>
-                <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Study<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Track</span></h1>
+                <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">
+                  Study<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Track</span>
+                </h1>
               </div>
-              
-              <div className="flex items-center gap-2">
-                <button onClick={() => { setShowSyncModal(true); generateCloudLink(); }} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold transition-all text-sm border border-indigo-200">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                  Short Link
-                </button>
-              </div>
+              <button
+                onClick={() => { setShowSyncModal(true); generateCloudLink(); }}
+                className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold transition-all text-sm border border-indigo-200">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+                Short Link
+              </button>
             </div>
           </header>
 
           <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+            {/* Top action bar */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 print-hidden">
               <div>
                 <h2 className="text-2xl font-black text-slate-800">Application Dashboard</h2>
                 <p className="text-sm text-slate-500 font-medium mt-1">Logo, Location & QS Ranking Automation</p>
               </div>
+
               <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
-                <button onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl font-semibold transition-all shadow-sm text-sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+
+                {/* ✅ FIX: Hidden input + <label htmlFor> is the ONLY reliable way to
+                    trigger file picker on mobile browsers. The old button.click() was
+                    blocked by Android Chrome's security policy. */}
+                <input
+                  type="file"
+                  id="csv-file-input"
+                  accept=".csv"
+                  ref={fileInputRef}
+                  onChange={handleImportCSV}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="csv-file-input"
+                  className="btn-label flex-1 md:flex-none flex justify-center items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl font-semibold transition-all shadow-sm text-sm">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                  </svg>
                   Import CSV
-                </button>
+                </label>
+
                 <button onClick={handleExportCSV} className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-4 py-2.5 rounded-xl font-semibold transition-all text-sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
                   Export CSV
                 </button>
+
                 <button onClick={() => window.print()} className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl font-semibold transition-all text-sm shadow-md">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                  </svg>
                   Save PDF
                 </button>
               </div>
             </div>
 
-            {/* --- Add Form Section --- */}
+            {/* ── Add Form ─────────────────────────────────────────────────── */}
             <div className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-slate-200 mb-10 print-hidden relative overflow-visible z-10">
               <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+                  </svg>
                 </div>
                 Add Target Program
               </h3>
-              
+
               <form onSubmit={handleAddProgram} className="grid grid-cols-1 md:grid-cols-12 gap-5 relative z-20">
+
+                {/* Degree */}
                 <div className="md:col-span-3">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Degree</label>
-                  <select name="degreeType" value={formData.degreeType} onChange={(e) => setFormData({...formData, degreeType: e.target.value, duration: e.target.value==='Master\'s'?'2 Years':'4 Years'})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
-                    <option value="Bachelor">Bachelor</option>
-                    <option value="Master's">Master's</option>
-                    <option value="PhD">PhD</option>
+                  <select
+                    name="degreeType"
+                    value={formData.degreeType}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      degreeType: e.target.value,
+                      duration: e.target.value === "Master's" ? '2 Years' : '4 Years'
+                    })}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
+                    <option>Bachelor</option>
+                    <option>Master's</option>
+                    <option>PhD</option>
                   </select>
                 </div>
 
-                {/* University Name + Live API */}
+                {/* University + Suggestions */}
                 <div className="md:col-span-9 relative" ref={suggestionRef}>
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 flex justify-between">
                     University Name
                     <span className="text-indigo-500 font-bold normal-case flex items-center gap-1">
-                      {isFetchingQS ? <span className="loader !w-3 !h-3"></span> : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>}
+                      {isFetchingQS
+                        ? <span className="loader !w-3 !h-3 border-indigo-300 border-t-indigo-600"></span>
+                        : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                      }
                       Live Global Search
                     </span>
                   </label>
-                  <input type="text" name="universityName" value={formData.universityName} onChange={handleAddInputChange} onFocus={() => setShowSuggestions(true)} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none" placeholder="Type to search globally (e.g. King Saud)..." required autoComplete="off" />
-                  
-                  {isSearchingUniv && <div className="absolute right-4 top-10"><div className="loader border-slate-300 border-t-slate-500"></div></div>}
-                  
-                  {/* Suggestions */}
+                  <input
+                    type="text"
+                    name="universityName"
+                    value={formData.universityName}
+                    onChange={handleAddInputChange}
+                    onFocus={() => setShowSuggestions(true)}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
+                    placeholder="Type to search globally (e.g. King Saud)..."
+                    required
+                    autoComplete="off"
+                  />
+
+                  {isSearchingUniv && (
+                    <div className="absolute right-4 top-11">
+                      <div className="loader border-slate-300 border-t-slate-500"></div>
+                    </div>
+                  )}
+
                   {showSuggestions && suggestions.length > 0 && (
                     <ul className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-50 max-h-64 overflow-y-auto">
                       {suggestions.map((univ, idx) => {
-                        const domain = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
-                        const tempLogo = domain ? `https://logo.clearbit.com/${domain}` : null;
+                        const domain  = univ.web_pages?.[0] ? extractDomain(univ.web_pages[0]) : null;
+                        const tmpLogo = domain ? `https://logo.clearbit.com/${domain}` : null;
                         return (
-                          <li key={idx} onClick={() => selectSuggestion(univ)} className="px-5 py-3.5 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 flex items-center gap-4 group">
+                          <li
+                            key={idx}
+                            onClick={() => selectSuggestion(univ)}
+                            className="px-5 py-3.5 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 flex items-center gap-4 group">
                             <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200">
-                              {tempLogo ? <img src={tempLogo} alt="" className="w-full h-full object-cover bg-white" onError={(e) => e.target.style.display = 'none'} /> : <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"/></svg>}
+                              {tmpLogo
+                                ? <img src={tmpLogo} alt="" className="w-full h-full object-cover bg-white" onError={(e) => e.target.style.display='none'}/>
+                                : <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"/></svg>
+                              }
                             </div>
                             <div className="flex-grow">
                               <p className="font-bold text-slate-800 group-hover:text-indigo-700 text-sm">{univ.name}</p>
-                              <p className="text-[11px] text-slate-500 font-bold mt-0.5">📍 {[univ['state-province'], univ.country].filter(Boolean).join(', ')}</p>
+                              <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                                📍 {[univ['state-province'], univ.country].filter(Boolean).join(', ')}
+                              </p>
                             </div>
                           </li>
                         );
@@ -451,61 +555,96 @@
                     </ul>
                   )}
                 </div>
-                
+
+                {/* QS Rank */}
                 <div className="md:col-span-3">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">QS Rank</label>
-                  <input type="text" name="qsRanking" value={formData.qsRanking} onChange={handleAddInputChange} className={`w-full p-3.5 border rounded-xl font-bold text-slate-800 outline-none transition-all ${isFetchingQS ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-100 animate-pulse' : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500'}`} placeholder="Auto/Manual..." />
+                  <input
+                    type="text"
+                    name="qsRanking"
+                    value={formData.qsRanking}
+                    onChange={handleAddInputChange}
+                    className={`w-full p-3.5 border rounded-xl font-bold text-slate-800 outline-none transition-all ${isFetchingQS ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-100 animate-pulse' : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500'}`}
+                    placeholder="Auto/Manual..."
+                  />
                 </div>
 
+                {/* City */}
                 <div className="md:col-span-4">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">City/State</label>
-                  <input type="text" name="cityState" value={formData.cityState} onChange={handleAddInputChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none" placeholder="City or State" />
+                  <input type="text" name="cityState" value={formData.cityState} onChange={handleAddInputChange}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
+                    placeholder="City or State"/>
                 </div>
 
+                {/* Country */}
                 <div className="md:col-span-5">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Country</label>
-                  <input type="text" name="country" value={formData.country} onChange={handleAddInputChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none" placeholder="Country" />
+                  <input type="text" name="country" value={formData.country} onChange={handleAddInputChange}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
+                    placeholder="Country"/>
                 </div>
 
+                {/* Program */}
                 <div className="md:col-span-6">
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Program Title <span className="text-rose-500">*</span></label>
-                  <input type="text" name="programName" value={formData.programName} onChange={handleAddInputChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none" placeholder="e.g. BSc in Computer Science" required />
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
+                    Program Title <span className="text-rose-500">*</span>
+                  </label>
+                  <input type="text" name="programName" value={formData.programName} onChange={handleAddInputChange}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
+                    placeholder="e.g. BSc in Computer Science" required/>
                 </div>
 
+                {/* Duration */}
                 <div className="md:col-span-2">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Duration</label>
-                  <select name="duration" value={formData.duration} onChange={handleAddInputChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
-                    {[1,2,3,4,5].map(y => <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>)}
+                  <select name="duration" value={formData.duration} onChange={handleAddInputChange}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
+                    {[1,2,3,4,5].map(y => (
+                      <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
+                    ))}
                   </select>
                 </div>
 
+                {/* Language */}
                 <div className="md:col-span-4">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Language</label>
-                  <select name="language" value={formData.language} onChange={handleAddInputChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
-                    <option value="English">English</option>
-                    <option value="Arabic">Arabic</option>
+                  {/* ✅ Added Bilingual option to match startEditing logic */}
+                  <select name="language" value={formData.language} onChange={handleAddInputChange}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 outline-none">
+                    <option>English</option>
+                    <option>Arabic</option>
+                    <option>Bilingual (Ar+En)</option>
                     <option value="Others">Others...</option>
                   </select>
                   {formData.language === 'Others' && (
-                    <input type="text" name="customLanguage" value={formData.customLanguage} onChange={handleAddInputChange} className="w-full p-3.5 mt-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none" placeholder="Specify..." required />
+                    <input type="text" name="customLanguage" value={formData.customLanguage} onChange={handleAddInputChange}
+                      className="w-full p-3.5 mt-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none"
+                      placeholder="Specify..." required/>
                   )}
                 </div>
 
                 <div className="md:col-span-12 flex justify-end mt-2">
-                  <button type="submit" className="px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/></svg>
+                  <button type="submit"
+                    className="px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
                     Add to List
                   </button>
                 </div>
               </form>
             </div>
 
-            {/* --- Preference List --- */}
+            {/* ── Preference List ───────────────────────────────────────────── */}
             <div className="flex justify-between items-center mb-6 mt-12 print-hidden">
               <h3 className="text-xl font-bold text-slate-800">Your Preference List</h3>
               {preferences.length > 1 && (
-                <button onClick={handleSortClick} className="flex items-center gap-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold text-sm transition-all border border-indigo-200 shadow-sm active:scale-95">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                <button onClick={handleSortClick}
+                  className="flex items-center gap-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold text-sm transition-all border border-indigo-200 shadow-sm active:scale-95">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                  </svg>
                   Sort by Rank
                 </button>
               )}
@@ -519,67 +658,160 @@
                 </div>
               ) : (
                 preferences.map((pref, index) => (
-                  <div key={pref.id} className="print-card relative bg-white p-6 sm:p-7 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-6 items-start sm:items-center hover:shadow-md hover:border-indigo-200 transition-all group overflow-hidden">
-                    
+                  <div
+                    key={pref.id}
+                    className="print-card relative bg-white p-6 sm:p-7 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-6 items-start sm:items-center hover:shadow-md hover:border-indigo-200 transition-all group overflow-hidden">
+
+                    {/* Badge */}
                     <div className="absolute -top-1 -left-1 sm:static sm:top-auto sm:left-auto flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 bg-slate-900 text-white rounded-br-[1.5rem] sm:rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg z-10">
                       #{index + 1}
                     </div>
 
-                    {/* Logo Section */}
+                    {/* Logo */}
                     {pref.logoUrl && (
                       <div className="hidden sm:flex w-16 h-16 rounded-full bg-white border border-slate-100 shadow-sm p-1 flex-shrink-0 items-center justify-center overflow-hidden">
-                        <img src={pref.logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />
+                        <img src={pref.logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display='none'}/>
                       </div>
                     )}
 
                     {editingId !== pref.id ? (
+                      /* ── View mode ── */
                       <>
                         <div className="flex-grow min-w-0 mt-8 sm:mt-0 w-full pl-2 sm:pl-0">
                           <div className="flex flex-wrap items-center gap-3 mb-2">
-                             <h3 className="text-xl font-extrabold text-slate-800 break-words leading-tight">
-                               {pref.universityName}
-                             </h3>
-                             <div className="flex gap-2">
-                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black tracking-wide border ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                                 QS: {pref.qsRanking}
-                               </span>
-                               {(pref.cityState || pref.country) && (
-                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                   📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
-                                 </span>
-                               )}
-                             </div>
+                            <h3 className="text-xl font-extrabold text-slate-800 break-words leading-tight">{pref.universityName}</h3>
+                            <div className="flex gap-2">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black tracking-wide border ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                </svg>
+                                QS: {pref.qsRanking}
+                              </span>
+                              {(pref.cityState || pref.country) && (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                  📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          
-                          <div className="flex flex-wrap items-center gap-2 text-indigo-700 font-bold mb-4">
+                          <div className="flex flex-wrap items-center gap-2 text-indigo-700 font-bold mb-2">
                             <span className="bg-indigo-50 px-3 py-1 rounded-lg text-sm border border-indigo-100">{pref.degreeType}</span>
                             <span className="text-slate-700 font-semibold">in {pref.programName}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-slate-500 font-medium">
+                            {pref.duration && <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">⏱ {pref.duration}</span>}
+                            {pref.language && <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">🌐 {pref.language}</span>}
                           </div>
                         </div>
 
                         <div className="flex sm:flex-col items-center justify-end gap-2.5 w-full sm:w-auto mt-5 sm:mt-0 print-hidden border-t sm:border-t-0 border-slate-100 pt-5 sm:pt-0">
-                          <div className="flex gap-2">
-                            <button onClick={() => startEditing(pref)} className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                          {/* ✅ FIX: Up/Down buttons now wired to movePreference */}
+                          <div className="flex gap-1.5 mb-1">
+                            <button
+                              onClick={() => movePreference(index, 'up')}
+                              disabled={index === 0}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Move Up">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/>
+                              </svg>
                             </button>
-                            <button onClick={() => handleDelete(pref.id)} className="p-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-200 shadow-sm">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            <button
+                              onClick={() => movePreference(index, 'down')}
+                              disabled={index === preferences.length - 1}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Move Down">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/>
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => startEditing(pref)}
+                              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 shadow-sm">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                              </svg>
+                            </button>
+                            <button onClick={() => handleDelete(pref.id)}
+                              className="p-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-200 shadow-sm">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                              </svg>
                             </button>
                           </div>
                         </div>
                       </>
                     ) : (
+                      /* ── Edit mode ✅ FIX: all fields now editable ── */
                       <div className="flex-grow w-full">
                         <div className="grid grid-cols-2 gap-3 mb-4">
-                           <input type="text" value={editFormData.universityName} onChange={(e) => setEditFormData({...editFormData, universityName: e.target.value})} className="col-span-2 p-3 border rounded-xl font-bold bg-white" placeholder="University Name" />
-                           <input type="text" value={editFormData.programName} onChange={(e) => setEditFormData({...editFormData, programName: e.target.value})} className="col-span-2 p-3 border rounded-xl font-bold bg-white" placeholder="Program Title" />
-                           <input type="text" value={editFormData.qsRanking} onChange={(e) => setEditFormData({...editFormData, qsRanking: e.target.value})} className="p-3 border rounded-xl font-bold bg-white" placeholder="QS Rank" />
-                           <input type="text" value={editFormData.cityState} onChange={(e) => setEditFormData({...editFormData, cityState: e.target.value})} className="p-3 border rounded-xl font-bold bg-white" placeholder="City" />
+                          <input type="text" value={editFormData.universityName}
+                            onChange={e => setEditFormData({...editFormData, universityName: e.target.value})}
+                            className="col-span-2 p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                            placeholder="University Name"/>
+
+                          <input type="text" value={editFormData.programName}
+                            onChange={e => setEditFormData({...editFormData, programName: e.target.value})}
+                            className="col-span-2 p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                            placeholder="Program Title"/>
+
+                          {/* ✅ Degree */}
+                          <select value={editFormData.degreeType}
+                            onChange={e => setEditFormData({...editFormData, degreeType: e.target.value})}
+                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                            <option>Bachelor</option>
+                            <option>Master's</option>
+                            <option>PhD</option>
+                          </select>
+
+                          <input type="text" value={editFormData.qsRanking}
+                            onChange={e => setEditFormData({...editFormData, qsRanking: e.target.value})}
+                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                            placeholder="QS Rank"/>
+
+                          <input type="text" value={editFormData.cityState}
+                            onChange={e => setEditFormData({...editFormData, cityState: e.target.value})}
+                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                            placeholder="City/State"/>
+
+                          {/* ✅ Country */}
+                          <input type="text" value={editFormData.country}
+                            onChange={e => setEditFormData({...editFormData, country: e.target.value})}
+                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                            placeholder="Country"/>
+
+                          {/* ✅ Duration */}
+                          <select value={editFormData.duration}
+                            onChange={e => setEditFormData({...editFormData, duration: e.target.value})}
+                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                            {[1,2,3,4,5].map(y => (
+                              <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
+                            ))}
+                          </select>
+
+                          {/* ✅ Language (includes Bilingual) */}
+                          <select value={editFormData.language}
+                            onChange={e => setEditFormData({...editFormData, language: e.target.value})}
+                            className="p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                            <option>English</option>
+                            <option>Arabic</option>
+                            <option>Bilingual (Ar+En)</option>
+                            <option value="Others">Others...</option>
+                          </select>
+
+                          {editFormData.language === 'Others' && (
+                            <input type="text" value={editFormData.customLanguage || ''}
+                              onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
+                              className="col-span-2 p-3 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
+                              placeholder="Specify language..."/>
+                          )}
                         </div>
                         <div className="flex justify-end gap-2">
-                           <button onClick={() => setEditingId(null)} className="px-5 py-2.5 border rounded-xl font-bold shadow-sm">Cancel</button>
-                           <button onClick={saveEdit} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md">Save</button>
+                          <button onClick={() => setEditingId(null)}
+                            className="px-5 py-2.5 border rounded-xl font-bold shadow-sm hover:bg-slate-50">Cancel</button>
+                          <button onClick={saveEdit}
+                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md">Save</button>
                         </div>
                       </div>
                     )}
@@ -593,19 +825,27 @@
           {showSyncModal && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl relative">
-                <button onClick={() => setShowSyncModal(false)} className="absolute top-5 right-5 text-slate-400 p-2 rounded-full hover:bg-slate-100 transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                <button onClick={() => setShowSyncModal(false)}
+                  className="absolute top-5 right-5 text-slate-400 p-2 rounded-full hover:bg-slate-100 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
                 </button>
                 <div className="text-center mb-6">
                   <h3 className="text-2xl font-black text-slate-800">Short Cloud Link</h3>
                 </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 break-all text-xs max-h-32 overflow-y-auto font-mono custom-scrollbar">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 break-all text-xs max-h-32 overflow-y-auto font-mono">
                   {syncLink}
                 </div>
-                <button onClick={() => { navigator.clipboard.writeText(syncLink); showToast('Link Copied Successfully!'); }} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">Copy Link</button>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(syncLink); showToast('Link Copied Successfully!'); }}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">
+                  Copy Link
+                </button>
               </div>
             </div>
           )}
+
         </div>
       );
     };
