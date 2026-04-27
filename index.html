@@ -10,6 +10,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   
   <style>
@@ -466,27 +467,113 @@
           .catch(err => { console.error(err); setIsSearchingUniv(false); });
       }, [debouncedSearch, showSuggestions]);
 
-      /* ── QS CSV Upload ─────────────────────────────────────────────── */
+      /* ── QS Upload (CSV or XLSX) ───────────────────────────────────── */
+      const [showGithubModal, setShowGithubModal] = useState(false);
+      const [githubRepo, setGithubRepo] = useState(() => localStorage.getItem('studyTracker_githubRepo') || '');
+      const [isLoadingGithub, setIsLoadingGithub] = useState(false);
+
+      // Fixed filename — always qsdata.xlsx in the repo root
+      const QS_FILENAME = 'qsdata.xlsx';
+
+      const buildJsDelivrUrl = (repo) => {
+        const clean = repo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+        return `https://cdn.jsdelivr.net/gh/${clean}@main/${QS_FILENAME}`;
+      };
+
+      const applyQsDb = (db, fileName) => {
+        const count = Object.keys(db).length;
+        if (count === 0) {
+          showToast('❌ QS data পড়া যায়নি। Format চেক করুন।', 'error');
+          return false;
+        }
+        setQsDb(db);
+        const meta = { fileName, count, loadedAt: new Date().toLocaleDateString() };
+        setQsDbMeta(meta);
+        localStorage.setItem('studyTracker_qsDb', JSON.stringify(db));
+        localStorage.setItem('studyTracker_qsMeta', JSON.stringify(meta));
+        showToast(`✅ QS Database loaded! ${count} universities found.`);
+        return true;
+      };
+
+      const parseQSXlsx = (arrayBuffer) => {
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (rows.length < 2) return {};
+        const header = rows[0].map(c => String(c).toLowerCase().trim());
+        let nameIdx = -1, rankIdx = -1;
+        header.forEach((c, i) => {
+          if (nameIdx === -1 && (c.includes('institution') || c.includes('university') || c.includes('name'))) nameIdx = i;
+          if (rankIdx === -1 && (c.includes('rank') || c === '#' || c === 'rank_display' || c === '2025' || c === '2026')) rankIdx = i;
+        });
+        if (nameIdx === -1) nameIdx = 1;
+        if (rankIdx === -1) rankIdx = 0;
+        const db = {};
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          const name = String(row[nameIdx] || '').trim().toLowerCase();
+          const rank = String(row[rankIdx] || '').trim();
+          if (name) db[name] = rank || 'N/A';
+        }
+        return db;
+      };
+
       const handleQSCsvUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
         const reader = new FileReader();
         reader.onload = (evt) => {
-          const db = parseQSCsv(evt.target.result);
-          const count = Object.keys(db).length;
-          if (count === 0) {
-            showToast('❌ Could not read QS data. Check CSV format.', 'error');
-            return;
+          let db;
+          if (isXlsx) {
+            db = parseQSXlsx(evt.target.result);
+          } else {
+            db = parseQSCsv(evt.target.result);
           }
-          setQsDb(db);
-          const meta = { fileName: file.name, count, loadedAt: new Date().toLocaleDateString() };
-          setQsDbMeta(meta);
-          localStorage.setItem('studyTracker_qsDb', JSON.stringify(db));
-          localStorage.setItem('studyTracker_qsMeta', JSON.stringify(meta));
-          showToast(`✅ QS Database loaded! ${count} universities found.`);
+          applyQsDb(db, file.name);
         };
-        reader.readAsText(file);
+        if (isXlsx) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
         e.target.value = null;
+      };
+
+      const handleLoadFromGithub = async () => {
+        if (!githubRepo.trim()) return;
+        const cdnUrl = buildJsDelivrUrl(githubRepo);
+        setIsLoadingGithub(true);
+        try {
+          const res = await fetch(cdnUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          const db = parseQSXlsx(buf);
+          const repoClean = githubRepo.trim().replace(/^https?:\/\/github\.com\//, '');
+          if (applyQsDb(db, `qsdata.xlsx (${repoClean})`)) {
+            localStorage.setItem('studyTracker_githubRepo', githubRepo.trim());
+            setShowGithubModal(false);
+          }
+        } catch (err) {
+          showToast('❌ লোড হয়নি। Repo name ঠিক আছে? qsdata.xlsx আছে? jsDelivr cache ~10 min লাগতে পারে।', 'error');
+        } finally {
+          setIsLoadingGithub(false);
+        }
+      };
+
+      const handleReloadFromGithub = async () => {
+        if (!githubRepo.trim()) return;
+        const cdnUrl = buildJsDelivrUrl(githubRepo);
+        setIsLoadingGithub(true);
+        try {
+          const res = await fetch(cdnUrl + '?t=' + Date.now()); // cache bust
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          const db = parseQSXlsx(buf);
+          const repoClean = githubRepo.trim().replace(/^https?:\/\/github\.com\//, '');
+          applyQsDb(db, `qsdata.xlsx (${repoClean})`);
+        } catch {
+          showToast('❌ Reload হয়নি। jsDelivr cache ~10 min লাগতে পারে।', 'error');
+        } finally {
+          setIsLoadingGithub(false);
+        }
       };
 
       const clearQsDb = () => {
@@ -663,38 +750,54 @@
         link.click();
       };
 
-      /* Programs CSV Import */
+      /* Programs CSV/XLSX Import */
+      const parseImportedRows = (rows) => {
+        const imported = [];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length < 7) continue;
+          const c = (s) => s != null ? String(s).replace(/^"|"$/g, '').trim() : '';
+          imported.push({
+            id:             Date.now().toString() + i,
+            degreeType:     c(row[1]) || 'Bachelor',
+            universityName: c(row[2]) || '',
+            qsRanking:      c(row[3]) || 'N/A',
+            cityState:      c(row[4]) || '',
+            country:        c(row[5]) || '',
+            programName:    c(row[6]) || '',
+            duration:       c(row[7]) || '',
+            language:       c(row[8]) || '',
+            logoUrl:        ''
+          });
+        }
+        return imported;
+      };
+
       const handleImportCSV = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
         const reader = new FileReader();
         reader.onload = (evt) => {
-          const lines = evt.target.result.split('\n').filter(l => l.trim());
-          if (lines.length < 2) return showToast('Invalid or empty CSV file.', 'error');
-          const imported = [];
-          for (let i = 1; i < lines.length; i++) {
-            const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            if (row.length >= 7) {
-              const c = (s) => s ? s.replace(/^"|"$/g, '').trim() : '';
-              imported.push({
-                id:             Date.now().toString() + i,
-                degreeType:     c(row[1]) || 'Bachelor',
-                universityName: c(row[2]) || '',
-                qsRanking:      c(row[3]) || 'N/A',
-                cityState:      c(row[4]) || '',
-                country:        c(row[5]) || '',
-                programName:    c(row[6]) || '',
-                duration:       c(row[7]) || '',
-                language:       c(row[8]) || '',
-                logoUrl:        ''
-              });
-            }
+          let rows;
+          if (isXlsx) {
+            const wb = XLSX.read(evt.target.result, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          } else {
+            const lines = evt.target.result.split('\n').filter(l => l.trim());
+            if (lines.length < 2) return showToast('Invalid or empty file.', 'error');
+            rows = lines.map(line => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
           }
+          if (!rows || rows.length < 2) return showToast('ফাইলে কোনো data নেই।', 'error');
+          const imported = parseImportedRows(rows);
+          if (!imported.length) return showToast('কোনো valid row পাওয়া যায়নি।', 'error');
           setPreferences(sortByRank([...preferences, ...imported]));
-          showToast(`✅ ${imported.length} programs imported!`);
+          showToast(`✅ ${imported.length}টি program import হয়েছে!`);
           e.target.value = null;
         };
-        reader.readAsText(file);
+        if (isXlsx) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
       };
 
       const toastColors = {
@@ -770,12 +873,12 @@
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <input type="file" id="csv-file-input" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} style={{ display: 'none' }} />
+                <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" ref={fileInputRef} onChange={handleImportCSV} style={{ display: 'none' }} />
                 <label htmlFor="csv-file-input" className="btn-ghost" style={{ cursor: 'pointer' }}>
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                   </svg>
-                  Import
+                  Import CSV/XLSX
                 </label>
                 <button onClick={handleExportCSV} className="btn-ghost" style={{ color: '#059669' }}>
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -816,6 +919,11 @@
                   <button onClick={clearQsDb} style={{ fontSize: '11px', color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
                     Remove
                   </button>
+                  {githubRepo && (
+                    <button onClick={handleReloadFromGithub} disabled={isLoadingGithub} style={{ fontSize: '11px', color: '#5b4fff', background: '#ede9ff', border: '1px solid #c7d2fe', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', fontWeight: 600, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      {isLoadingGithub ? <><div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }}></div></> : '🔄'} Reload
+                    </button>
+                  )}
                 </div>
               ) : (
                 /* Not loaded state */
@@ -833,9 +941,12 @@
                     <button onClick={() => setShowGuide(true)} style={{ fontSize: '11px', color: '#5b4fff', background: 'white', border: '1.5px solid #c7d2fe', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
                       📖 How?
                     </button>
-                    <input type="file" id="qs-csv-input" accept=".csv" ref={qsCsvInputRef} onChange={handleQSCsvUpload} style={{ display: 'none' }} />
+                    <button onClick={() => setShowGithubModal(true)} style={{ fontSize: '11px', color: '#5b4fff', background: 'white', border: '1.5px solid #c7d2fe', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
+                      🐙 GitHub
+                    </button>
+                    <input type="file" id="qs-csv-input" accept=".csv,.xlsx,.xls" ref={qsCsvInputRef} onChange={handleQSCsvUpload} style={{ display: 'none' }} />
                     <label htmlFor="qs-csv-input" style={{ fontSize: '11px', color: 'white', background: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      ⬆ Upload CSV
+                      ⬆ CSV/XLSX
                     </label>
                   </div>
                 </div>
@@ -1283,6 +1394,134 @@
             </div>
           )}
 
+          {/* ── GitHub Load Modal ──────────────────────────────────────── */}
+          {showGithubModal && (
+            <div style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(26,23,48,0.6)',
+              backdropFilter: 'blur(14px)',
+              zIndex: 9998,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px', overflowY: 'auto'
+            }}>
+              <div style={{
+                background: 'white', borderRadius: '24px', padding: '32px',
+                maxWidth: '480px', width: '100%',
+                boxShadow: '0 24px 80px rgba(91,79,255,0.25)',
+                position: 'relative', maxHeight: '90vh', overflowY: 'auto'
+              }}>
+                <button onClick={() => setShowGithubModal(false)} style={{
+                  position: 'absolute', top: '16px', right: '16px',
+                  width: 32, height: 32, borderRadius: '10px',
+                  border: '1px solid var(--border)', background: 'white',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--text-2)'
+                }}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+
+                <div style={{ fontSize: '28px', marginBottom: '8px' }}>🐙</div>
+                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', marginBottom: '4px', color: 'var(--text)' }}>
+                  GitHub দিয়ে QS Data Manage করো
+                </h3>
+                <p style={{ fontSize: '12.5px', color: 'var(--text-2)', marginBottom: '20px', lineHeight: 1.6 }}>
+                  একবার setup করলে শুধু GitHub এ file replace করলেই হবে — সব user এর কাছে automatically নতুন data যাবে।
+                </p>
+
+                {/* Steps */}
+                <div style={{ marginBottom: '20px' }}>
+                  <div className="step-row">
+                    <div className="step-num">1</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>GitHub এ একটা Repository তৈরি করো</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
+                        <a href="https://github.com/new" target="_blank" style={{ color: 'var(--accent)', fontWeight: 600 }}>github.com/new</a> এ যাও → Repository name দাও (যেমন <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>studytrack-data</code>) → <strong>Public</strong> রাখো → Create করো
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="step-row">
+                    <div className="step-num">2</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>QS data file টা <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>qsdata.xlsx</code> নামে save করো</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
+                        topuniversities.com থেকে download করা file এর নাম <strong>qsdata.xlsx</strong> করো। এই exact নামটাই লাগবে।
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="step-row">
+                    <div className="step-num">3</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Repository তে file upload করো</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
+                        Repo page এ <strong>"Add file → Upload files"</strong> click করো → <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>qsdata.xlsx</code> drag করো → <strong>Commit changes</strong> করো
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="step-row" style={{ borderBottom: 'none' }}>
+                    <div className="step-num">4</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>নিচে শুধু <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>username/repo</code> দাও</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
+                        GitHub username আর repository name — এটুকুই লাগবে। বাকিটা app নিজে করবে।
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info box */}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '12px 14px', marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: '16px', marginTop: '1px' }}>🔄</div>
+                  <div style={{ fontSize: '12px', color: '#065f46', lineHeight: 1.6 }}>
+                    <strong>পরের বছর update করতে:</strong> GitHub এ নতুন <code style={{ background: '#bbf7d0', padding: '1px 5px', borderRadius: '4px' }}>qsdata.xlsx</code> upload করো (same নামে replace) → app এ <strong>Reload</strong> button চাপো। ব্যস!
+                  </div>
+                </div>
+
+                {/* Input */}
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-2)', marginBottom: '8px', fontFamily: 'Bricolage Grotesque' }}>
+                  GitHub Username / Repo Name
+                </label>
+                <div style={{ position: 'relative', marginBottom: '8px' }}>
+                  <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: 'var(--text-2)', fontWeight: 500, pointerEvents: 'none' }}>
+                    github.com/
+                  </span>
+                  <input
+                    type="text"
+                    value={githubRepo}
+                    onChange={e => setGithubRepo(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLoadFromGithub()}
+                    className="input-field"
+                    placeholder="yourname/studytrack-data"
+                    style={{ paddingLeft: '100px' }}
+                  />
+                </div>
+                <div style={{ fontSize: '11.5px', color: 'var(--text-2)', marginBottom: '20px' }}>
+                  ⚡ jsDelivr CDN ব্যবহার করে — unlimited requests, no rate limit
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => setShowGithubModal(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleLoadFromGithub}
+                    disabled={isLoadingGithub || !githubRepo.trim()}
+                    className="btn-primary"
+                    style={{ flex: 2, justifyContent: 'center', opacity: (!githubRepo.trim() || isLoadingGithub) ? 0.6 : 1 }}>
+                    {isLoadingGithub
+                      ? <><div className="spinner" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }}></div> Loading…</>
+                      : <>🐙 Load qsdata.xlsx</>
+                    }
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── QS CSV Guide Modal ──────────────────────────────────── */}
           {showGuide && (
             <div style={{
@@ -1398,7 +1637,7 @@
                   <label htmlFor="qs-csv-input" onClick={() => setShowGuide(false)}
                     style={{ flex: 1, justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                     className="btn-primary">
-                    ⬆ Upload CSV Now
+                    ⬆ Upload CSV/XLSX Now
                   </label>
                 </div>
               </div>
