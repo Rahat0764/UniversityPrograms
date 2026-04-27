@@ -416,19 +416,11 @@
         }
       });
 
-      // QS database loaded from CSV
-      const [qsDb, setQsDb] = useState(() => {
-        try {
-          const saved = localStorage.getItem('studyTracker_qsDb');
-          return saved ? JSON.parse(saved) : null;
-        } catch { return null; }
-      });
-      const [qsDbMeta, setQsDbMeta] = useState(() => {
-        try {
-          const saved = localStorage.getItem('studyTracker_qsMeta');
-          return saved ? JSON.parse(saved) : null;
-        } catch { return null; }
-      });
+      // QS database — auto-loaded from GitHub on startup
+      const [qsDb, setQsDb] = useState(null);
+      const [qsDbMeta, setQsDbMeta] = useState(null);
+      const [qsLoading, setQsLoading] = useState(false);
+      const [qsError, setQsError] = useState(false);
 
       const defaultForm = {
         degreeType: 'Bachelor',
@@ -452,11 +444,8 @@
       const [suggestions,  setSuggestions]  = useState([]);
       const [isSearchingUniv, setIsSearchingUniv] = useState(false);
       const [showSuggestions, setShowSuggestions] = useState(false);
-      const [showGuide,       setShowGuide]       = useState(false);
 
       const suggestionRef  = useRef(null);
-      const fileInputRef   = useRef(null);
-      const qsCsvInputRef  = useRef(null);
       const debouncedSearch = useDebounce(formData.universityName, 500);
 
       /* Auto-save preferences */
@@ -512,33 +501,8 @@
         setSuggestions(results);
       }, [debouncedSearch, showSuggestions, qsDb]);
 
-      /* ── QS Upload (CSV or XLSX) ───────────────────────────────────── */
-      const [showGithubModal, setShowGithubModal] = useState(false);
-      const [githubRepo, setGithubRepo] = useState(() => localStorage.getItem('studyTracker_githubRepo') || '');
-      const [isLoadingGithub, setIsLoadingGithub] = useState(false);
-
-      // Fixed filename — always qsdata.xlsx in the repo root
-      const QS_FILENAME = 'qsdata.xlsx';
-
-      const buildJsDelivrUrl = (repo) => {
-        const clean = repo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
-        return `https://cdn.jsdelivr.net/gh/${clean}@main/${QS_FILENAME}`;
-      };
-
-      const applyQsDb = (db, fileName) => {
-        const count = Object.keys(db).length;
-        if (count === 0) {
-          showToast('❌ Could not read QS data. Check the file format.', 'error');
-          return false;
-        }
-        setQsDb(db);
-        const meta = { fileName, count, loadedAt: new Date().toLocaleDateString() };
-        setQsDbMeta(meta);
-        localStorage.setItem('studyTracker_qsDb', JSON.stringify(db));
-        localStorage.setItem('studyTracker_qsMeta', JSON.stringify(meta));
-        showToast(`✅ QS Database loaded! ${count} universities found.`);
-        return true;
-      };
+      /* ── QS Auto-fetch from GitHub on page load ───────────────────── */
+      const QS_CDN_URL = 'https://cdn.jsdelivr.net/gh/Rahat0764/UniversityPrograms@main/qsdata.xlsx';
 
       const parseQSXlsx = (arrayBuffer) => {
         const wb = XLSX.read(arrayBuffer, { type: 'array' });
@@ -546,8 +510,7 @@
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         if (rows.length < 3) return {};
 
-        // ── Find the true header row (the one containing "name" or "rank") ──
-        // QS 2026 format: row 0 = title, row 1 = group headers, row 2 = sub-headers (Index/Rank/Name...)
+        // QS 2026 format: row 0 = title, row 1 = group headers, row 2 = sub-headers
         let headerRowIdx = 0;
         for (let i = 0; i < Math.min(6, rows.length); i++) {
           const cells = rows[i].map(c => String(c).toLowerCase().trim());
@@ -558,97 +521,49 @@
 
         const header = rows[headerRowIdx].map(c => String(c).toLowerCase().trim());
 
-        // Find name column: look for exact 'name' or 'institution' first
         let nameIdx = header.findIndex(c => c === 'name' || c === 'institution');
         if (nameIdx === -1) nameIdx = header.findIndex(c => c.includes('name') || c.includes('institution') || c.includes('university'));
 
-        // Find rank column: prefer the first numeric-year column (2026, 2025) or 'rank'
         let rankIdx = header.findIndex(c => c === '2026' || c === '2025');
         if (rankIdx === -1) rankIdx = header.findIndex(c => c === 'rank');
         if (rankIdx === -1) rankIdx = header.findIndex(c => c.includes('rank'));
 
-        // Hard fallback for QS standard format (confirmed: col1=Rank, col3=Name)
+        // QS standard fallback: col1=Rank, col3=Name, col4=Country
         if (rankIdx === -1) rankIdx = 1;
         if (nameIdx === -1) nameIdx = 3;
+
+        let countryIdx = header.findIndex(c => c === 'country/territory' || c === 'country' || c === 'location');
+        if (countryIdx === -1) countryIdx = 4;
 
         const db = {};
         for (let i = headerRowIdx + 1; i < rows.length; i++) {
           const row = rows[i];
           const rawName = String(row[nameIdx] || '').trim();
           const rawRank = String(row[rankIdx] || '').trim();
-          // Skip empty or header-like rows
+          const rawCountry = String(row[countryIdx] || '').trim();
           if (!rawName || rawName.toLowerCase() === 'name' || rawName.toLowerCase() === 'institution') continue;
           if (rawName.length < 3) continue;
-          db[rawName.toLowerCase()] = rawRank || 'N/A';
+          db[rawName.toLowerCase()] = { originalName: rawName, rank: rawRank || 'N/A', country: rawCountry };
         }
         return db;
       };
 
-      const handleQSCsvUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          let db;
-          if (isXlsx) {
-            db = parseQSXlsx(evt.target.result);
-          } else {
-            db = parseQSCsv(evt.target.result);
-          }
-          applyQsDb(db, file.name);
-        };
-        if (isXlsx) reader.readAsArrayBuffer(file);
-        else reader.readAsText(file);
-        e.target.value = null;
-      };
-
-      const handleLoadFromGithub = async () => {
-        if (!githubRepo.trim()) return;
-        const cdnUrl = buildJsDelivrUrl(githubRepo);
-        setIsLoadingGithub(true);
-        try {
-          const res = await fetch(cdnUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const buf = await res.arrayBuffer();
-          const db = parseQSXlsx(buf);
-          const repoClean = githubRepo.trim().replace(/^https?:\/\/github\.com\//, '');
-          if (applyQsDb(db, `qsdata.xlsx (${repoClean})`)) {
-            localStorage.setItem('studyTracker_githubRepo', githubRepo.trim());
-            setShowGithubModal(false);
-          }
-        } catch (err) {
-          showToast('❌ Failed to load. Check repo name and that qsdata.xlsx exists. jsDelivr may take ~10 min to cache.', 'error');
-        } finally {
-          setIsLoadingGithub(false);
-        }
-      };
-
-      const handleReloadFromGithub = async () => {
-        if (!githubRepo.trim()) return;
-        const cdnUrl = buildJsDelivrUrl(githubRepo);
-        setIsLoadingGithub(true);
-        try {
-          const res = await fetch(cdnUrl + '?t=' + Date.now()); // cache bust
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const buf = await res.arrayBuffer();
-          const db = parseQSXlsx(buf);
-          const repoClean = githubRepo.trim().replace(/^https?:\/\/github\.com\//, '');
-          applyQsDb(db, `qsdata.xlsx (${repoClean})`);
-        } catch {
-          showToast('❌ Reload failed. jsDelivr may take ~10 min to cache new files.', 'error');
-        } finally {
-          setIsLoadingGithub(false);
-        }
-      };
-
-      const clearQsDb = () => {
-        setQsDb(null);
-        setQsDbMeta(null);
-        localStorage.removeItem('studyTracker_qsDb');
-        localStorage.removeItem('studyTracker_qsMeta');
-        showToast('QS database cleared.', 'warn');
-      };
+      // Auto-fetch on mount
+      useEffect(() => {
+        setQsLoading(true);
+        fetch(QS_CDN_URL)
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+          .then(buf => {
+            const db = parseQSXlsx(buf);
+            const count = Object.keys(db).length;
+            if (count === 0) throw new Error('Empty');
+            setQsDb(db);
+            setQsDbMeta({ count, loadedAt: new Date().toLocaleDateString() });
+            setQsError(false);
+          })
+          .catch(() => setQsError(true))
+          .finally(() => setQsLoading(false));
+      }, []);
 
       /* ── Helpers ───────────────────────────────────────────────────── */
       const showToast = (message, type = 'success') => {
@@ -955,62 +870,32 @@
               </div>
             </div>
 
-            {/* ── QS Database Banner ──────────────────────────────────── */}
-            <div className="print-hidden">
-              {qsDb ? (
-                /* Loaded state */
-                <div style={{
-                  background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                  border: '1.5px solid #6ee7b7',
-                  borderRadius: '16px', padding: '14px 18px',
-                  display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px'
-                }}>
-                  <div style={{ width: 40, height: 40, borderRadius: '12px', background: 'white', border: '1px solid #6ee7b7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '20px' }}>
-                    ✅
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '13px', color: '#065f46' }}>
-                      QS Database Loaded — {qsDbMeta?.count?.toLocaleString()} universities
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#059669', marginTop: '2px' }}>
-                      {qsDbMeta?.fileName} · Rank auto-fills when you select a university
-                    </div>                  </div>
-                  <button onClick={clearQsDb} style={{ fontSize: '11px', color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
-                    Remove
-                  </button>
-                  {githubRepo && (
-                    <button onClick={handleReloadFromGithub} disabled={isLoadingGithub} style={{ fontSize: '11px', color: '#5b4fff', background: '#ede9ff', border: '1px solid #c7d2fe', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', fontWeight: 600, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      {isLoadingGithub ? <><div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }}></div></> : '🔄'} Reload
-                    </button>
-                  )}
-                </div>
-              ) : (
-                /* Not loaded state */
-                <div className="qs-banner" style={{ marginBottom: '20px', flexWrap: 'wrap' }}>
-                  <div className="qs-banner-icon">📊</div>
-                  <div style={{ flex: 1, minWidth: '160px' }}>
-                    <div style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '13px', color: '#3730a3' }}>
-                      Upload QS Rankings CSV for Auto Rank
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: '#6366f1', marginTop: '2px' }}>
-                      Download once from topuniversities.com · Works offline · No API needed
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-                    <button onClick={() => setShowGuide(true)} style={{ fontSize: '11px', color: '#5b4fff', background: 'white', border: '1.5px solid #c7d2fe', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
-                      📖 How?
-                    </button>
-                    <button onClick={() => setShowGithubModal(true)} style={{ fontSize: '11px', color: '#5b4fff', background: 'white', border: '1.5px solid #c7d2fe', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
-                      🐙 GitHub
-                    </button>
-                    <input type="file" id="qs-csv-input" accept=".csv,.xlsx,.xls" ref={qsCsvInputRef} onChange={handleQSCsvUpload} style={{ display: 'none' }} />
-                    <label htmlFor="qs-csv-input" style={{ fontSize: '11px', color: 'white', background: 'var(--accent)', border: '1.5px solid var(--accent)', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      ⬆ CSV/XLSX
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* ── QS Status (invisible to user, just loading indicator) ── */}
+            {qsLoading && (
+              <div className="print-hidden" style={{
+                background: 'linear-gradient(135deg, #eef2ff 0%, #ede9ff 100%)',
+                border: '1.5px solid #c7d2fe', borderRadius: '16px',
+                padding: '12px 18px', display: 'flex', alignItems: 'center',
+                gap: '12px', marginBottom: '20px'
+              }}>
+                <div className="spinner"></div>
+                <span style={{ fontSize: '13px', color: '#4338ca', fontWeight: 600 }}>
+                  Loading QS Rankings data…
+                </span>
+              </div>
+            )}
+            {qsError && (
+              <div className="print-hidden" style={{
+                background: '#fef2f2', border: '1.5px solid #fecaca',
+                borderRadius: '16px', padding: '12px 18px',
+                display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px'
+              }}>
+                <span style={{ fontSize: '18px' }}>⚠️</span>
+                <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
+                  Could not load QS Rankings. University search unavailable — enter details manually.
+                </span>
+              </div>
+            )}
 
             {/* ── Add Form ─────────────────────────────────────────── */}
             <div className="card print-hidden" style={{ padding: '24px', marginBottom: '32px', position: 'relative', overflow: 'visible' }}>
@@ -1048,33 +933,28 @@
 
                   {/* QS Rank */}
                   <div>
-                    <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      QS Rank
-                      {qsDb && (
-                        <span style={{ fontWeight: 600, fontSize: '10px', color: '#059669', textTransform: 'none', letterSpacing: 0 }}>
-                          ✅ CSV loaded
-                        </span>
-                      )}
-                    </label>
+                    <label className="label">QS Rank</label>
                     <input
                       type="text"
                       name="qsRanking"
                       value={formData.qsRanking}
                       onChange={handleAddInputChange}
                       className="input-field"
-                      placeholder={qsDb ? "Auto-filled from CSV" : "Enter manually"}/>
+                      placeholder={qsLoading ? "Loading…" : qsDb ? "Auto-filled" : "Enter manually"}/>
                   </div>
 
                   {/* University Name */}
                   <div style={{ gridColumn: '1 / -1', position: 'relative' }} ref={suggestionRef}>
                     <label className="label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       University Name
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 500, fontSize: '10px', color: 'var(--accent)', textTransform: 'none', letterSpacing: 0 }}>
-                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                        </svg>
-                        {qsDb ? 'Search from QS Database' : 'Upload QS data to search'}
-                      </span>
+                      {qsDb && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 500, fontSize: '10px', color: 'var(--accent)', textTransform: 'none', letterSpacing: 0 }}>
+                          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                          </svg>
+                          Search from QS Database
+                        </span>
+                      )}
                     </label>
                     <div style={{ position: 'relative' }}>
                       <input
@@ -1085,7 +965,7 @@
                         onFocus={() => setShowSuggestions(true)}
                         className="input-field"
                         style={{ paddingRight: formData.universityName ? '40px' : '16px' }}
-                        placeholder={qsDb ? "Type to search from QS database…" : "Enter university name manually"}
+                        placeholder={qsLoading ? "Loading QS data…" : qsDb ? "Type to search universities…" : "Enter university name"}
                         required
                         autoComplete="off"
                       />
@@ -1435,256 +1315,6 @@
                   </svg>
                   Copy Short Link
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── GitHub Load Modal ──────────────────────────────────────── */}
-          {showGithubModal && (
-            <div style={{
-              position: 'fixed', inset: 0,
-              background: 'rgba(26,23,48,0.6)',
-              backdropFilter: 'blur(14px)',
-              zIndex: 9998,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '20px', overflowY: 'auto'
-            }}>
-              <div style={{
-                background: 'white', borderRadius: '24px', padding: '32px',
-                maxWidth: '480px', width: '100%',
-                boxShadow: '0 24px 80px rgba(91,79,255,0.25)',
-                position: 'relative', maxHeight: '90vh', overflowY: 'auto'
-              }}>
-                <button onClick={() => setShowGithubModal(false)} style={{
-                  position: 'absolute', top: '16px', right: '16px',
-                  width: 32, height: 32, borderRadius: '10px',
-                  border: '1px solid var(--border)', background: 'white',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--text-2)'
-                }}>
-                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
-
-                <div style={{ fontSize: '28px', marginBottom: '8px' }}>🐙</div>
-                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', marginBottom: '4px', color: 'var(--text)' }}>
-                  Manage QS Data via GitHub
-                </h3>
-                <p style={{ fontSize: '12.5px', color: 'var(--text-2)', marginBottom: '20px', lineHeight: 1.6 }}>
-                  Set up once — just replace the file on GitHub and all users get updated data automatically.
-                </p>
-
-                {/* Steps */}
-                <div style={{ marginBottom: '20px' }}>
-                  <div className="step-row">
-                    <div className="step-num">1</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Create a GitHub Repository</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        Go to <a href="https://github.com/new" target="_blank" style={{ color: 'var(--accent)', fontWeight: 600 }}>github.com/new</a> → Enter a name (e.g. <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>studytrack-data</code>) → Set to <strong>Public</strong> → Create
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="step-row">
-                    <div className="step-num">2</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Rename your QS file to <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>qsdata.xlsx</code></div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        Rename the file downloaded from topuniversities.com to exactly <strong>qsdata.xlsx</strong> — this exact name is required.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="step-row">
-                    <div className="step-num">3</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Upload the file to your repository</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        On the repo page click <strong>"Add file → Upload files"</strong> → drag <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11px' }}>qsdata.xlsx</code> → click <strong>Commit changes</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="step-row" style={{ borderBottom: 'none' }}>
-                    <div className="step-num">4</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text)', marginBottom: '3px' }}>Enter your <code style={{ background: '#f3f1ff', padding: '1px 6px', borderRadius: '5px', fontSize: '11.5px' }}>username/repo</code> below</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-2)', lineHeight: 1.6 }}>
-                        Just your GitHub username and repo name — the app handles the rest.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Info box */}
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '12px 14px', marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <div style={{ fontSize: '16px', marginTop: '1px' }}>🔄</div>
-                  <div style={{ fontSize: '12px', color: '#065f46', lineHeight: 1.6 }}>
-                    <strong>To update next year:</strong> Upload the new <code style={{ background: '#bbf7d0', padding: '1px 5px', borderRadius: '4px' }}>qsdata.xlsx</code> to GitHub (replacing the old file) → hit <strong>Reload</strong> in the app. Done!
-                  </div>
-                </div>
-
-                {/* Input */}
-                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-2)', marginBottom: '8px', fontFamily: 'Bricolage Grotesque' }}>
-                  GitHub Username / Repo Name
-                </label>
-                <div style={{ position: 'relative', marginBottom: '8px' }}>
-                  <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: 'var(--text-2)', fontWeight: 500, pointerEvents: 'none' }}>
-                    github.com/
-                  </span>
-                  <input
-                    type="text"
-                    value={githubRepo}
-                    onChange={e => setGithubRepo(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleLoadFromGithub()}
-                    className="input-field"
-                    placeholder="yourname/studytrack-data"
-                    style={{ paddingLeft: '100px' }}
-                  />
-                </div>
-                <div style={{ fontSize: '11.5px', color: 'var(--text-2)', marginBottom: '20px' }}>
-                  ⚡ Uses jsDelivr CDN — unlimited requests, no rate limit
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => setShowGithubModal(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleLoadFromGithub}
-                    disabled={isLoadingGithub || !githubRepo.trim()}
-                    className="btn-primary"
-                    style={{ flex: 2, justifyContent: 'center', opacity: (!githubRepo.trim() || isLoadingGithub) ? 0.6 : 1 }}>
-                    {isLoadingGithub
-                      ? <><div className="spinner" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }}></div> Loading…</>
-                      : <>🐙 Load qsdata.xlsx</>
-                    }
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── QS CSV Guide Modal ──────────────────────────────────── */}
-          {showGuide && (
-            <div style={{
-              position: 'fixed', inset: 0,
-              background: 'rgba(26,23,48,0.6)',
-              backdropFilter: 'blur(14px)',
-              zIndex: 9998,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '20px', overflowY: 'auto'
-            }}>
-              <div style={{
-                background: 'white', borderRadius: '24px', padding: '32px',
-                maxWidth: '480px', width: '100%',
-                boxShadow: '0 24px 80px rgba(91,79,255,0.25)',
-                position: 'relative', maxHeight: '90vh', overflowY: 'auto'
-              }}>
-                <button
-                  onClick={() => setShowGuide(false)}
-                  style={{
-                    position: 'absolute', top: '16px', right: '16px',
-                    width: 32, height: 32, borderRadius: '10px',
-                    border: '1px solid var(--border)', background: 'white',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--text-2)'
-                  }}>
-                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
-
-                <div style={{ fontSize: '28px', marginBottom: '8px' }}>📊</div>
-                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', marginBottom: '4px', color: 'var(--text)' }}>
-                  How to Get QS Rankings Data
-                </h3>
-                <p style={{ fontSize: '12.5px', color: 'var(--text-2)', marginBottom: '20px' }}>
-                  Download once — upload a new file each year and all ranks update automatically.
-                </p>
-
-                <div>
-                  <div className="step-row">
-                    <div className="step-num">1</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        Go to topuniversities.com
-                      </div>
-                      <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Open this link in your browser:
-                      </div>
-                      <a href="https://www.topuniversities.com/world-university-rankings" target="_blank"
-                        style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600, wordBreak: 'break-all' }}>
-                        topuniversities.com/world-university-rankings
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="step-row">
-                    <div className="step-num">2</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        Find the "Download Data" button
-                      </div>
-                      <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Look for a <strong>"Download"</strong> or <strong>"Export"</strong> button above or below the rankings table and click it.
-                        <br/><br/>
-                        ⚠️ A free account may be required — registration is free.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="step-row">
-                    <div className="step-num">3</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        Save the file
-                      </div>
-                      <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Save the downloaded file anywhere on your phone or PC.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="step-row">
-                    <div className="step-num">4</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>
-                        Upload it here
-                      </div>
-                      <div style={{ fontSize: '12.5px', color: 'var(--text-2)', lineHeight: '1.5' }}>
-                        Click <strong>"⬆ CSV/XLSX"</strong> in the banner and select the file. All university ranks will load instantly.
-                        <br/><br/>
-                        From then on, rank fills in <strong>automatically</strong> whenever you search for a university!
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="step-row" style={{ background: '#f0fdf4', borderRadius: '12px', padding: '14px', margin: '4px 0', border: '1px solid #bbf7d0' }}>
-                    <div style={{ fontSize: '20px' }}>🔄</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '13px', color: '#065f46', marginBottom: '4px' }}>
-                        Updating each year
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#059669', lineHeight: '1.5' }}>
-                        When new QS rankings are released, just download the new file and upload it again. All data updates automatically.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                  <button onClick={() => setShowGuide(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
-                    Close
-                  </button>
-                  <label htmlFor="qs-csv-input" onClick={() => setShowGuide(false)}
-                    style={{ flex: 1, justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                    className="btn-primary">
-                    ⬆ Upload CSV/XLSX Now
-                  </label>
-                </div>
               </div>
             </div>
           )}
