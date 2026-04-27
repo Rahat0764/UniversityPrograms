@@ -419,7 +419,7 @@
       // QS database — auto-loaded from GitHub on startup
       const [qsDb, setQsDb] = useState(null);
       const [qsDbMeta, setQsDbMeta] = useState(null);
-      const [qsLoading, setQsLoading] = useState(false);
+      const [qsLoading, setQsLoading] = useState(true);
       const [qsError, setQsError] = useState(false);
 
       const defaultForm = {
@@ -446,6 +446,7 @@
       const [showSuggestions, setShowSuggestions] = useState(false);
 
       const suggestionRef  = useRef(null);
+      const fileInputRef   = useRef(null);
       const debouncedSearch = useDebounce(formData.universityName, 500);
 
       /* Auto-save preferences */
@@ -504,8 +505,15 @@
         setSuggestions(results);
       }, [debouncedSearch, showSuggestions, qsDb]);
 
-      /* ── QS Auto-fetch from GitHub on page load ───────────────────── */
+      /* ── QS Auto-fetch ────────────────────────────────────────────── */
       const QS_CDN_URL = 'https://gdrive.rahatx.workers.dev/0:down/Sheets/qsdata.xlsx';
+
+      // CORS proxy list — tried in order until one succeeds
+      const CORS_PROXIES = [
+        (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        (url) => `https://cors-anywhere.herokuapp.com/${url}`,
+      ];
 
       const parseQSXlsx = (arrayBuffer) => {
         const wb = XLSX.read(arrayBuffer, { type: 'array' });
@@ -558,26 +566,46 @@
         setTimeout(() => setToast(null), 4000);
       };
 
-      // Auto-fetch QS data on mount — runs after showToast is defined
+      // Auto-fetch QS data on mount — tries direct URL first, then CORS proxies
       useEffect(() => {
         setQsLoading(true);
-        fetch(QS_CDN_URL)
-          .then(r => {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.arrayBuffer();
-          })
-          .then(buf => {
-            const db = parseQSXlsx(buf);
-            const count = Object.keys(db).length;
-            if (count === 0) throw new Error('Empty');
-            setQsDb(db);
-            setQsDbMeta({ count, loadedAt: new Date().toLocaleDateString() });
-            setQsError(false);
-          })
-          .catch(() => {
-            setQsError(true);
-          })
-          .finally(() => setQsLoading(false));
+        setQsError(false);
+
+        const tryFetch = async (url) => {
+          const r = await fetch(url);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.arrayBuffer();
+        };
+
+        const loadQS = async () => {
+          // Build ordered URL list: direct first, then proxies
+          const urls = [
+            QS_CDN_URL,
+            ...CORS_PROXIES.map(p => p(QS_CDN_URL))
+          ];
+
+          let lastErr = null;
+          for (const url of urls) {
+            try {
+              const buf = await tryFetch(url);
+              const db  = parseQSXlsx(buf);
+              const count = Object.keys(db).length;
+              if (count === 0) throw new Error('Empty DB');
+              setQsDb(db);
+              setQsDbMeta({ count, loadedAt: new Date().toLocaleDateString() });
+              setQsError(false);
+              return; // success — stop trying
+            } catch (e) {
+              lastErr = e;
+              // continue to next proxy
+            }
+          }
+          // All attempts failed
+          console.error('QS load failed:', lastErr);
+          setQsError(true);
+        };
+
+        loadQS().finally(() => setQsLoading(false));
       }, []);
 
       const extractDomain = (url) => {
