@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StudyTrack — University Preference Manager</title>
+  <title>ProgramsTracker — University Preference Manager</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -26,6 +26,16 @@
       --success: #059669;
       --danger: #dc2626;
       --gold: #d97706;
+      /* Degree colors */
+      --bachelor-bg: #eff6ff;
+      --bachelor-border: #bfdbfe;
+      --bachelor-accent: #1d4ed8;
+      --masters-bg: #fff1f2;
+      --masters-border: #fecdd3;
+      --masters-accent: #be185d;
+      --phd-bg: #fffbeb;
+      --phd-border: #fde68a;
+      --phd-accent: #b45309;
     }
 
     * { box-sizing: border-box; }
@@ -52,7 +62,6 @@
         margin-bottom: 16px;
         page-break-inside: avoid;
       }
-      /* PDF: show university count header */
       .print-header {
         display: block !important;
         font-family: 'Bricolage Grotesque', sans-serif;
@@ -88,6 +97,23 @@
     }
     .card:hover { border-color: #c5bef5; box-shadow: 0 8px 32px rgba(91,79,255,0.08); }
 
+    /* Degree-themed card backgrounds */
+    .card-bachelor {
+      background: linear-gradient(135deg, #ffffff 0%, #f0f5ff 100%);
+      border-color: var(--bachelor-border);
+    }
+    .card-bachelor:hover { border-color: #93c5fd; box-shadow: 0 8px 32px rgba(29,78,216,0.1); }
+    .card-masters {
+      background: linear-gradient(135deg, #ffffff 0%, #fff5f7 100%);
+      border-color: var(--masters-border);
+    }
+    .card-masters:hover { border-color: #f9a8d4; box-shadow: 0 8px 32px rgba(190,24,93,0.1); }
+    .card-phd {
+      background: linear-gradient(135deg, #ffffff 0%, #fffdf0 100%);
+      border-color: var(--phd-border);
+    }
+    .card-phd:hover { border-color: #fcd34d; box-shadow: 0 8px 32px rgba(180,83,9,0.1); }
+
     .input-field {
       width: 100%;
       padding: 13px 16px;
@@ -107,7 +133,6 @@
       box-shadow: 0 0 0 3px rgba(91,79,255,0.12);
     }
     .input-field::placeholder { color: #b0adc8; font-weight: 400; }
-
     select.input-field { cursor: pointer; }
 
     .label {
@@ -190,7 +215,6 @@
       padding: 3px 10px;
       border-radius: 8px;
     }
-
     .rank-num { background: #fff8e6; color: var(--gold); border: 1px solid #fde68a; }
     .rank-na  { background: #f3f4f6; color: #9ca3af; border: 1px solid #e5e7eb; }
 
@@ -257,7 +281,19 @@
       box-shadow: 0 4px 12px rgba(91,79,255,0.3);
     }
 
-    /* QS banner */
+    /* Degree-themed number badges */
+    .num-badge-bachelor { background: linear-gradient(135deg, #1d4ed8, #3b82f6); box-shadow: 0 4px 12px rgba(29,78,216,0.3); }
+    .num-badge-masters  { background: linear-gradient(135deg, #be185d, #ec4899); box-shadow: 0 4px 12px rgba(190,24,93,0.3); }
+    .num-badge-phd      { background: linear-gradient(135deg, #b45309, #f59e0b); box-shadow: 0 4px 12px rgba(180,83,9,0.3); }
+
+    /* Program name styling */
+    .program-name {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: -0.01em;
+    }
+
     .qs-banner {
       background: linear-gradient(135deg, #eef2ff 0%, #ede9ff 100%);
       border: 1.5px solid #c7d2fe;
@@ -268,17 +304,7 @@
       gap: 14px;
       margin-bottom: 16px;
     }
-    .qs-banner-icon {
-      width: 40px; height: 40px;
-      border-radius: 12px;
-      background: white;
-      border: 1px solid #c7d2fe;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      font-size: 20px;
-    }
 
-    /* Guide modal steps */
     .step-row {
       display: flex; align-items: flex-start; gap: 14px;
       padding: 14px 0;
@@ -297,6 +323,64 @@
       flex-shrink: 0;
       margin-top: 2px;
     }
+
+    /* Degree selector tabs */
+    .degree-tab {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: white;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.18s;
+      text-align: center;
+      color: var(--text-2);
+    }
+    .degree-tab.active-bachelor { background: var(--bachelor-bg); border-color: var(--bachelor-border); color: var(--bachelor-accent); }
+    .degree-tab.active-masters  { background: var(--masters-bg);  border-color: var(--masters-border);  color: var(--masters-accent); }
+    .degree-tab.active-phd      { background: var(--phd-bg);      border-color: var(--phd-border);      color: var(--phd-accent); }
+
+    /* Rank growth badges */
+    .rank-growth {
+      font-size: 9.5px;
+      font-weight: 800;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      padding: 1px 5px;
+      border-radius: 5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 1px;
+      flex-shrink: 0;
+    }
+    .rank-up   { color: #059669; background: #d1fae5; }
+    .rank-down { color: #dc2626; background: #fee2e2; }
+
+    /* Overall score pill */
+    .score-pill {
+      font-size: 9.5px;
+      font-weight: 700;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: #f3f0ff;
+      color: var(--accent);
+      border: 1px solid #d4caff;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    /* Footer credit */
+    .dev-credit {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-2);
+      padding: 20px 0 8px;
+    }
+    .dev-credit a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    .dev-credit a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -305,10 +389,31 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
 
+    // --- Utilities ---
+
     const parseRank = (rank) => {
       if (!rank || rank.toString().toUpperCase() === 'N/A') return Infinity;
       const match = rank.toString().match(/\d+/);
       return match ? parseInt(match[0], 10) : Infinity;
+    };
+
+    // Parse range ranks like "701-710" → start number
+    const parseRankStart = (rank) => {
+      if (!rank || rank.toString().toUpperCase() === 'N/A') return null;
+      const s = rank.toString().trim();
+      const rangeMatch = s.match(/^(\d+)-(\d+)$/);
+      if (rangeMatch) return parseInt(rangeMatch[1], 10);
+      const num = parseInt(s, 10);
+      return isNaN(num) ? null : num;
+    };
+
+    // Compute rank change between current and previous rank strings
+    const computeRankGrowth = (currentRank, prevRank) => {
+      const cur = parseRankStart(currentRank);
+      const prv = parseRankStart(prevRank);
+      if (cur === null || prv === null) return null;
+      const diff = prv - cur; // positive = improved (rank number decreased)
+      return diff;
     };
 
     function useDebounce(value, delay) {
@@ -320,42 +425,10 @@
       return dv;
     }
 
-    const parseQSCsv = (text) => {
-      const lines = text.split('\n').filter(l => l.trim());
-      if (lines.length < 2) return {};
-      const header = lines[0].toLowerCase();
-
-      const cols = lines[0].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g,'').trim().toLowerCase());
-      
-      let nameIdx = -1, rankIdx = -1;
-      cols.forEach((c, i) => {
-        if (nameIdx === -1 && (c.includes('institution') || c.includes('university') || c.includes('name'))) nameIdx = i;
-        if (rankIdx === -1 && (c.includes('rank') || c === '#' || c === 'rank_display' || c === '2025' || c === '2026')) rankIdx = i;
-      });
-
-      // Fallback: rank is col 0, name is col 1 (common QS format)
-      if (nameIdx === -1) nameIdx = 1;
-      if (rankIdx === -1) rankIdx = 0;
-
-      const db = {};
-      for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        if (row.length <= Math.max(nameIdx, rankIdx)) continue;
-        const clean = s => (s || '').replace(/^"|"$/g,'').trim();
-        const name = clean(row[nameIdx]).toLowerCase();
-        let rank = clean(row[rankIdx]);
-        if (!name) continue;
-        // Keep range ranks like "401-410" as-is
-        db[name] = rank || 'N/A';
-      }
-      return db;
-    };
-
-    // Normalize: remove punctuation, extra spaces, common suffixes for better matching
+    // Normalize university name for matching
     const normalizeUnivName = (s) => s.toLowerCase().trim()
       .replace(/[''`]/g, "'")
       .replace(/[^a-z0-9\s']/g, ' ')
-      // Normalize common spelling variants
       .replace(/\bmadinah\b/g, 'medinah')
       .replace(/\bmedina\b/g, 'medinah')
       .replace(/\bjeddah\b/g, 'jeddah')
@@ -368,37 +441,27 @@
       const q = univName.toLowerCase().trim();
       const qNorm = normalizeUnivName(univName);
 
-      // 1. Exact match
       if (qsDb[q]) return qsDb[q];
-
-      // 2. Normalized exact match
-      for (const [key, rank] of Object.entries(qsDb)) {
-        if (normalizeUnivName(key) === qNorm) return rank;
+      for (const [key, entry] of Object.entries(qsDb)) {
+        if (normalizeUnivName(key) === qNorm) return entry;
       }
-
-      // 3. Strict substring match — only if lengths are close (within 30%)
-      // This prevents "King Saud University" from matching "King Saud bin Abdulaziz University"
-      for (const [key, rank] of Object.entries(qsDb)) {
+      for (const [key, entry] of Object.entries(qsDb)) {
         const shorter = q.length < key.length ? q : key;
         const longer  = q.length < key.length ? key : q;
         const ratio   = shorter.length / longer.length;
-        if (ratio >= 0.7 && longer.includes(shorter)) return rank;
+        if (ratio >= 0.7 && longer.includes(shorter)) return entry;
       }
-
-      // 4. Normalized substring match — also length-ratio gated
-      for (const [key, rank] of Object.entries(qsDb)) {
+      for (const [key, entry] of Object.entries(qsDb)) {
         const kNorm   = normalizeUnivName(key);
         const shorter = qNorm.length < kNorm.length ? qNorm : kNorm;
         const longer  = qNorm.length < kNorm.length ? kNorm : qNorm;
         const ratio   = shorter.length / longer.length;
-        if (ratio >= 0.7 && longer.includes(shorter)) return rank;
+        if (ratio >= 0.7 && longer.includes(shorter)) return entry;
       }
-
-      // 5. Word-overlap scoring — all significant words must match
       const qWords = qNorm.split(' ').filter(w => w.length > 2);
       if (qWords.length > 0) {
         let bestKey = null, bestScore = 0;
-        for (const [key, rank] of Object.entries(qsDb)) {
+        for (const [key, entry] of Object.entries(qsDb)) {
           const kWords = normalizeUnivName(key).split(' ').filter(w => w.length > 2);
           const matches = qWords.filter(w => kWords.includes(w)).length;
           const score = matches / Math.max(qWords.length, kWords.length);
@@ -406,23 +469,100 @@
         }
         if (bestKey) return qsDb[bestKey];
       }
-
       return null;
     };
 
-    /* ─── App ─────────────────────────────────────────────────────────── */
+    // --- Duration options by degree ---
+    const DURATION_OPTIONS = {
+      'Bachelor':  ['3 Years', '4 Years', '5 Years', '6 Years', '7 Years'],
+      "Master's":  ['1 Year', '2 Years', '3 Years'],
+      'PhD':       ['1 Year','2 Years','3 Years','4 Years','5 Years','6 Years','7 Years','8 Years','9 Years'],
+    };
+
+    const DEFAULT_DURATION = {
+      'Bachelor':  '4 Years',
+      "Master's":  '2 Years',
+      'PhD':       '3 Years',
+    };
+
+    // Generate unique file ID
+    const genFileId = () => {
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      return `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${Date.now().toString(36).toUpperCase()}`;
+    };
+
+    // --- QS XLSX Parser (updated: includes city, prevRank, overallScore) ---
+    const parseQSXlsx = (arrayBuffer) => {
+      const wb = XLSX.read(arrayBuffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 3) return {};
+
+      let headerRowIdx = 2;
+      for (let i = 0; i < Math.min(6, rows.length); i++) {
+        const cells = rows[i].map(c => String(c).toLowerCase().trim());
+        if (cells.some(c => c === 'name' || c === 'rank')) { headerRowIdx = i; break; }
+      }
+
+      const header = rows[headerRowIdx].map(c => String(c).toLowerCase().trim());
+
+      let nameIdx    = header.findIndex(c => c === 'name');
+      if (nameIdx === -1) nameIdx = header.findIndex(c => c.includes('name') || c.includes('institution'));
+      if (nameIdx === -1) nameIdx = 3;
+
+      let rankIdx    = header.findIndex(c => c === 'rank');
+      if (rankIdx === -1) rankIdx = header.findIndex(c => c.includes('rank') && !c.includes('previous') && !c.includes('prev'));
+      if (rankIdx === -1) rankIdx = 1;
+
+      let prevRankIdx = header.findIndex(c => c.includes('previous') || c.includes('prev rank'));
+      if (prevRankIdx === -1) prevRankIdx = 2;
+
+      let countryIdx = header.findIndex(c => c === 'country/territory' || c === 'country');
+      if (countryIdx === -1) countryIdx = header.findIndex(c => c.includes('country') || c === 'location');
+      if (countryIdx === -1) countryIdx = 4;
+
+      let cityIdx = header.findIndex(c => c === 'city');
+      if (cityIdx === -1) cityIdx = 5;
+
+      let overallIdx = header.findIndex(c => c.includes('overall'));
+      if (overallIdx === -1) overallIdx = header.length - 1;
+
+      const db = {};
+      for (let i = headerRowIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        const rawName    = String(row[nameIdx]    || '').trim();
+        const rawRank    = String(row[rankIdx]    || '').trim();
+        const rawPrev    = String(row[prevRankIdx]|| '').trim();
+        const rawCountry = String(row[countryIdx] || '').trim();
+        const rawCity    = String(row[cityIdx]    || '').trim();
+        const rawScore   = String(row[overallIdx] || '').trim();
+        if (!rawName || rawName.toLowerCase() === 'name') continue;
+        if (rawName.length < 3) continue;
+        db[rawName.toLowerCase()] = {
+          originalName: rawName,
+          rank: rawRank || 'N/A',
+          prevRank: rawPrev || '',
+          country: rawCountry,
+          city: rawCity,
+          overallScore: rawScore,
+        };
+      }
+      return db;
+    };
+
+    // --- App Component ---
     const App = () => {
       const [preferences, setPreferences] = useState(() => {
         try {
-          const saved = localStorage.getItem('studyTrackerV7');
+          const saved = localStorage.getItem('programsTrackerV1');
           return saved ? JSON.parse(saved) : [];
         } catch {
-          localStorage.removeItem('studyTrackerV7');
+          localStorage.removeItem('programsTrackerV1');
           return [];
         }
       });
 
-      // QS database — auto-loaded from GitHub on startup
       const [qsDb, setQsDb] = useState(null);
       const [qsDbMeta, setQsDbMeta] = useState(null);
       const [qsLoading, setQsLoading] = useState(true);
@@ -436,6 +576,7 @@
         country: '',
         programName: '',
         duration: '4 Years',
+        customDuration: '',
         language: 'English',
         customLanguage: '',
         logoUrl: '',
@@ -449,7 +590,6 @@
       const [syncLink,     setSyncLink]     = useState('');
       const [toast,        setToast]        = useState(null);
       const [suggestions,  setSuggestions]  = useState([]);
-      const [isSearchingUniv, setIsSearchingUniv] = useState(false);
       const [showSuggestions, setShowSuggestions] = useState(false);
 
       const suggestionRef  = useRef(null);
@@ -457,10 +597,9 @@
       const qsFileInputRef = useRef(null);
       const debouncedSearch = useDebounce(formData.universityName, 500);
 
-      /* ── City auto-fetch via Wikidata ─────────────────────────────── */
+      // --- City auto-fetch via Wikidata (for non-QS universities) ---
       const fetchCityForUniversity = async (univName, country) => {
         try {
-          // Use Wikidata SPARQL to find city/location of the university
           const sparql = `
             SELECT ?cityLabel WHERE {
               ?univ wdt:P31/wdt:P279* wd:Q3918 .
@@ -478,11 +617,11 @@
             setFormData(prev => ({ ...prev, cityState: city }));
           }
         } catch {
-          // silent fail — user can enter manually
+          // silent fail
         }
       };
 
-      /* ── Manual QS XLSX import ────────────────────────────────────── */
+      // --- Manual QS XLSX import ---
       const handleManualQSImport = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -504,12 +643,12 @@
         e.target.value = null;
       };
 
-      /* Auto-save preferences */
+      // --- Auto-save preferences ---
       useEffect(() => {
-        localStorage.setItem('studyTrackerV7', JSON.stringify(preferences));
+        localStorage.setItem('programsTrackerV1', JSON.stringify(preferences));
       }, [preferences]);
 
-      /* Cloud Sync Restore */
+      // --- Cloud Sync Restore ---
       useEffect(() => {
         const params   = new URLSearchParams(window.location.search);
         const syncData = params.get('s');
@@ -527,7 +666,7 @@
         }
       }, []);
 
-      /* Close suggestions on outside click */
+      // --- Close suggestions on outside click ---
       useEffect(() => {
         const handler = (e) => {
           if (suggestionRef.current && !suggestionRef.current.contains(e.target))
@@ -537,7 +676,7 @@
         return () => document.removeEventListener('mousedown', handler);
       }, []);
 
-      /* University search — QS database only */
+      // --- University search from QS database ---
       useEffect(() => {
         if (!debouncedSearch || debouncedSearch.length <= 1 || !showSuggestions) {
           setSuggestions([]); return;
@@ -551,8 +690,11 @@
             results.push({
               name: entry.originalName || key,
               _qsKey: key,
-              _qsRank: entry.rank || entry,
+              _qsRank: entry.rank || '',
+              _qsPrevRank: entry.prevRank || '',
               _qsCountry: entry.country || '',
+              _qsCity: entry.city || '',
+              _qsOverall: entry.overallScore || '',
             });
             if (results.length >= 8) break;
           }
@@ -560,87 +702,24 @@
         setSuggestions(results);
       }, [debouncedSearch, showSuggestions, qsDb]);
 
-      /* ── QS Auto-fetch ────────────────────────────────────────────── */
+      // --- QS Auto-fetch from /data/qsdata.xlsx with CORS proxies ---
       const QS_PATH = '/data/qsdata.xlsx';
-
-      // CORS proxy list — tried in order until one succeeds
       const CORS_PROXIES = [
         (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
         (url) => `https://cors-anywhere.herokuapp.com/${url}`,
       ];
 
-      const parseQSXlsx = (arrayBuffer) => {
-        const wb = XLSX.read(arrayBuffer, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (rows.length < 3) return {};
-
-        // QS 2026 xlsx structure:
-        //   Row 0: title row
-        //   Row 1: group headers (2026, 2025, Institution, Location…)
-        //   Row 2: sub-headers (Index, Rank, Previous Rank, Name, Country/Territory…)
-        //   Row 3+: data
-        // Find the header row that has 'name' or 'rank' in it
-        let headerRowIdx = 2; // default for QS 2026
-        for (let i = 0; i < Math.min(6, rows.length); i++) {
-          const cells = rows[i].map(c => String(c).toLowerCase().trim());
-          if (cells.some(c => c === 'name' || c === 'rank')) { headerRowIdx = i; break; }
-        }
-
-        const header = rows[headerRowIdx].map(c => String(c).toLowerCase().trim());
-
-        // QS 2026 known columns: [Index, Rank, Previous Rank, Name, Country/Territory, ...]
-        let nameIdx    = header.findIndex(c => c === 'name');
-        if (nameIdx === -1) nameIdx = header.findIndex(c => c.includes('name') || c.includes('institution'));
-        if (nameIdx === -1) nameIdx = 3;
-
-        let rankIdx    = header.findIndex(c => c === 'rank');
-        if (rankIdx === -1) rankIdx = header.findIndex(c => c.includes('rank'));
-        if (rankIdx === -1) rankIdx = 1;
-
-        let countryIdx = header.findIndex(c => c === 'country/territory' || c === 'country');
-        if (countryIdx === -1) countryIdx = header.findIndex(c => c.includes('country') || c === 'location');
-        if (countryIdx === -1) countryIdx = 4;
-
-        const db = {};
-        for (let i = headerRowIdx + 1; i < rows.length; i++) {
-          const row = rows[i];
-          const rawName    = String(row[nameIdx]    || '').trim();
-          const rawRank    = String(row[rankIdx]    || '').trim();
-          const rawCountry = String(row[countryIdx] || '').trim();
-          if (!rawName || rawName.toLowerCase() === 'name') continue;
-          if (rawName.length < 3) continue;
-          db[rawName.toLowerCase()] = { originalName: rawName, rank: rawRank || 'N/A', country: rawCountry };
-        }
-        return db;
-      };
-
-
-      /* ── Helpers ───────────────────────────────────────────────────── */
-      const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4000);
-      };
-
-      // Auto-fetch QS data on mount — tries direct URL first, then CORS proxies
       useEffect(() => {
         setQsLoading(true);
         setQsError(false);
-
         const tryFetch = async (url) => {
           const r = await fetch(url);
           if (!r.ok) throw new Error('HTTP ' + r.status);
           return r.arrayBuffer();
         };
-
         const loadQS = async () => {
-          // Build ordered URL list: direct first, then proxies
-          const urls = [
-            QS_PATH,
-            ...CORS_PROXIES.map(p => p(QS_PATH))
-          ];
-
+          const urls = [QS_PATH, ...CORS_PROXIES.map(p => p(QS_PATH))];
           let lastErr = null;
           for (const url of urls) {
             try {
@@ -651,52 +730,75 @@
               setQsDb(db);
               setQsDbMeta({ count, loadedAt: new Date().toLocaleDateString() });
               setQsError(false);
-              return; // success — stop trying
-            } catch (e) {
-              lastErr = e;
-              // continue to next proxy
-            }
+              return;
+            } catch (e) { lastErr = e; }
           }
-          // All attempts failed
           console.error('QS load failed:', lastErr);
           setQsError(true);
         };
-
         loadQS().finally(() => setQsLoading(false));
       }, []);
+
+      // --- Helpers ---
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      const sortByRank = (list) =>
+        [...list].sort((a, b) => parseRank(a.qsRanking) - parseRank(b.qsRanking));
 
       const extractDomain = (url) => {
         if (!url) return null;
         try { return new URL(url).hostname.replace('www.', ''); } catch { return null; }
       };
 
-      const sortByRank = (list) =>
-        [...list].sort((a, b) => parseRank(a.qsRanking) - parseRank(b.qsRanking));
-
-      /* Form handlers */
+      // --- Form handlers ---
       const handleAddInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         if (name === 'universityName') setShowSuggestions(true);
       };
 
+      // When degree changes, reset duration to default for that degree
+      const handleDegreeChange = (deg) => {
+        setFormData(prev => ({
+          ...prev,
+          degreeType: deg,
+          duration: DEFAULT_DURATION[deg] || '4 Years',
+          customDuration: '',
+        }));
+      };
+
+      // Selecting a university from QS dropdown
       const selectSuggestion = (univ) => {
         const rank    = univ._qsRank    || '';
         const country = univ._qsCountry || '';
+        const city    = univ._qsCity    || '';
         setFormData(prev => ({
           ...prev,
           universityName: univ.name,
           qsRanking:      rank,
           country:        country,
+          cityState:      city,
         }));
         setShowSuggestions(false);
-        // After filling country, try to fetch city via API
-        if (univ.name) fetchCityForUniversity(univ.name, country);
+        // If no city from QS, try Wikidata (only for non-QS manual input)
+        if (!city && univ.name) fetchCityForUniversity(univ.name, country);
         if (rank && rank !== 'N/A') {
           showToast(`✅ QS Rank found: ${rank}`);
         } else {
           showToast('Rank not found in QS database. You can enter it manually.', 'warn');
         }
+      };
+
+      // Get final duration value (custom overrides select)
+      const getFinalDuration = (data) => {
+        if (data.customDuration && data.customDuration.trim()) {
+          const cd = data.customDuration.trim();
+          return cd.includes('Year') || cd.includes('year') ? cd : `${cd} Years`;
+        }
+        return data.duration;
       };
 
       const handleAddProgram = (e) => {
@@ -707,22 +809,35 @@
           ? (formData.customLanguage || 'Not Specified')
           : formData.language;
 
+        // If university is from QS db, fetch overallScore and prevRank
+        let overallScore = '';
+        let prevRank = '';
+        if (qsDb) {
+          const entry = lookupRank(qsDb, formData.universityName);
+          if (entry && typeof entry === 'object') {
+            overallScore = entry.overallScore || '';
+            prevRank = entry.prevRank || '';
+          }
+        }
+
         const newPref = {
           id:             Date.now().toString(),
           degreeType:     formData.degreeType,
           universityName: formData.universityName,
           qsRanking:      formData.qsRanking || 'N/A',
+          prevRank:       prevRank,
+          overallScore:   overallScore,
           cityState:      formData.cityState,
           country:        formData.country,
           programName:    formData.programName,
-          duration:       formData.duration,
+          duration:       getFinalDuration(formData),
           language:       finalLang,
           logoUrl:        formData.logoUrl,
           gender:         formData.gender || 'Both'
         };
 
         setPreferences(sortByRank([...preferences, newPref]));
-        setFormData(prev => ({ ...prev, programName: '' }));
+        setFormData(prev => ({ ...prev, programName: '', customDuration: '' }));
         showToast('✅ Program added!');
       };
 
@@ -738,7 +853,7 @@
         setSuggestions([]);
       };
 
-      /* Edit / Delete */
+      // --- Edit / Delete ---
       const STANDARD_LANGS = ['English', 'Arabic', 'Bilingual (Ar+En)'];
 
       const startEditing = (pref) => {
@@ -747,7 +862,8 @@
         setEditFormData({
           ...pref,
           language:       isStd ? pref.language : 'Others',
-          customLanguage: isStd ? '' : pref.language
+          customLanguage: isStd ? '' : pref.language,
+          customDuration: '',
         });
       };
 
@@ -755,8 +871,9 @@
         const finalLang = editFormData.language === 'Others'
           ? (editFormData.customLanguage || 'Not Specified')
           : editFormData.language;
+        const finalDuration = getFinalDuration(editFormData);
         const updated = preferences.map(p =>
-          p.id === editingId ? { ...editFormData, language: finalLang, gender: editFormData.gender || 'Both' } : p
+          p.id === editingId ? { ...editFormData, language: finalLang, duration: finalDuration, gender: editFormData.gender || 'Both' } : p
         );
         setPreferences(sortByRank(updated));
         setEditingId(null);
@@ -782,7 +899,7 @@
         showToast('List sorted by QS Ranking.');
       };
 
-      /* Cloud sync */
+      // --- Cloud sync ---
       const [isShortening, setIsShortening] = useState(false);
 
       const generateCloudLink = async () => {
@@ -803,7 +920,7 @@
         }
       };
 
-      /* CSV Export */
+      // --- CSV Export (unique filename) ---
       const handleExportCSV = () => {
         const headers = ['Rank','Degree','University Name','QS World Ranking','City/State','Country','Program Name','Duration','Language','Gender'];
         const rows = preferences.map((p, i) => [
@@ -820,11 +937,11 @@
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'StudyTrack_Programs.csv';
+        link.download = `ProgramsTracker_${genFileId()}.csv`;
         link.click();
       };
 
-      /* Programs CSV/XLSX Import */
+      // --- Programs CSV/XLSX Import ---
       const parseImportedRows = (rows) => {
         const imported = [];
         for (let i = 1; i < rows.length; i++) {
@@ -841,7 +958,10 @@
             programName:    c(row[6]) || '',
             duration:       c(row[7]) || '',
             language:       c(row[8]) || '',
-            logoUrl:        ''
+            gender:         c(row[9]) || 'Both',
+            logoUrl:        '',
+            prevRank:       '',
+            overallScore:   '',
           });
         }
         return imported;
@@ -874,6 +994,37 @@
         else reader.readAsText(file);
       };
 
+      // --- Rank growth display component ---
+      const RankGrowth = ({ current, previous }) => {
+        const diff = computeRankGrowth(current, previous);
+        if (diff === null || diff === 0) return null;
+        if (diff > 0) return <span className="rank-growth rank-up">▲{diff}</span>;
+        return <span className="rank-growth rank-down">▼{Math.abs(diff)}</span>;
+      };
+
+      // --- Degree card class ---
+      const degreeCardClass = (deg) => {
+        if (deg === 'Bachelor') return 'card-bachelor';
+        if (deg === "Master's") return 'card-masters';
+        if (deg === 'PhD') return 'card-phd';
+        return '';
+      };
+
+      const degreeBadgeNumClass = (deg) => {
+        if (deg === 'Bachelor') return 'num-badge-bachelor';
+        if (deg === "Master's") return 'num-badge-masters';
+        if (deg === 'PhD') return 'num-badge-phd';
+        return '';
+      };
+
+      // --- Overall score: show only if valid (not blank, not '−', not '-') ---
+      const isValidScore = (s) => {
+        if (!s) return false;
+        const trimmed = s.toString().trim();
+        return trimmed !== '' && trimmed !== '−' && trimmed !== '-' && trimmed !== 'N/A';
+      };
+
+      // Toast colors
       const toastColors = {
         success: { bg: '#1a1730', border: '#2d2550', text: 'white' },
         error:   { bg: '#fef2f2', border: '#fecaca', text: '#dc2626' },
@@ -881,7 +1032,7 @@
       };
       const tc = toastColors[toast?.type] || toastColors.success;
 
-      /* ════════════════════════════════ RENDER ════════════════════════ */
+      // ════════════════════════════════ RENDER ════════════════════════
       return (
         <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
 
@@ -919,7 +1070,7 @@
                   </svg>
                 </div>
                 <span style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '20px', color: 'var(--text)' }}>
-                  Study<span style={{ color: 'var(--accent)' }}>Track</span>
+                  Programs<span style={{ color: 'var(--accent)' }}>Tracker</span>
                 </span>
               </div>
               <button
@@ -943,7 +1094,7 @@
                   Application Dashboard
                 </h2>
                 <p style={{ color: 'var(--text-2)', fontSize: '13px', marginTop: '3px' }}>
-                  QS CSV lookup · Logo detection · Cloud sync
+                  QS rankings · City & country auto-fill · Cloud sync
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -969,7 +1120,7 @@
               </div>
             </div>
 
-            {/* ── QS Status bar ─────────────────────────────────────── */}
+            {/* QS Status bar */}
             {(qsLoading || qsError || qsDb) && (
               <div className="print-hidden" style={{
                 background: qsError ? '#fef2f2' : 'linear-gradient(135deg, #eef2ff 0%, #ede9ff 100%)',
@@ -990,13 +1141,8 @@
                         : `${qsDbMeta?.count?.toLocaleString() || 0} universities loaded`}
                   </span>
                 </div>
-                {/* Manual QS import */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="file" id="qs-file-input" accept=".xlsx,.xls"
-                    ref={qsFileInputRef} onChange={handleManualQSImport}
-                    style={{ display: 'none' }}
-                  />
+                  <input type="file" id="qs-file-input" accept=".xlsx,.xls" ref={qsFileInputRef} onChange={handleManualQSImport} style={{ display: 'none' }} />
                   <label htmlFor="qs-file-input" className="btn-ghost" style={{ fontSize: '11.5px', padding: '7px 13px', cursor: 'pointer', borderColor: qsError ? '#fca5a5' : undefined }}>
                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
@@ -1006,7 +1152,6 @@
                 </div>
               </div>
             )}
-            {/* Show import button even before first load attempt if not loading */}
             {!qsLoading && !qsError && !qsDb && (
               <div className="print-hidden" style={{
                 background: '#fef2f2', border: '1.5px solid #fecaca',
@@ -1016,9 +1161,7 @@
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '16px' }}>⚠️</span>
-                  <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
-                    QS data not loaded — import manually
-                  </span>
+                  <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>QS data not loaded — import manually</span>
                 </div>
                 <div>
                   <input type="file" id="qs-file-input-b" accept=".xlsx,.xls" onChange={handleManualQSImport} style={{ display: 'none' }} />
@@ -1032,7 +1175,7 @@
               </div>
             )}
 
-            {/* ── Add Form ─────────────────────────────────────────── */}
+            {/* Add Form */}
             <div className="card print-hidden" style={{ padding: '24px', marginBottom: '32px', position: 'relative', overflow: 'visible' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
                 <div style={{ width: 32, height: 32, borderRadius: '10px', background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1048,22 +1191,20 @@
               <form onSubmit={handleAddProgram}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
 
-                  {/* Degree */}
-                  <div>
-                    <label className="label">Degree</label>
-                    <select
-                      name="degreeType"
-                      value={formData.degreeType}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        degreeType: e.target.value,
-                        duration: e.target.value === "Master's" ? '2 Years' : '4 Years'
-                      })}
-                      className="input-field">
-                      <option>Bachelor</option>
-                      <option>Master's</option>
-                      <option>PhD</option>
-                    </select>
+                  {/* Degree — tab-style selector */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="label">Degree Type</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {['Bachelor', "Master's", 'PhD'].map(deg => (
+                        <button
+                          key={deg}
+                          type="button"
+                          className={`degree-tab ${formData.degreeType === deg ? 'active-' + deg.replace("'s",'').toLowerCase() : ''}`}
+                          onClick={() => handleDegreeChange(deg)}>
+                          {deg === 'Bachelor' ? '🎓' : deg === "Master's" ? '📘' : '🔬'} {deg}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* QS Rank */}
@@ -1076,6 +1217,30 @@
                       onChange={handleAddInputChange}
                       className="input-field"
                       placeholder={qsLoading ? "Loading…" : qsDb ? "Auto-filled" : "Enter manually"}/>
+                  </div>
+
+                  {/* Duration — degree-specific + manual override */}
+                  <div>
+                    <label className="label">Duration</label>
+                    <select name="duration" value={formData.duration}
+                      onChange={handleAddInputChange} className="input-field">
+                      {DURATION_OPTIONS[formData.degreeType].map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Manual duration override */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="label" style={{ fontSize: '9.5px', color: '#b0adc8' }}>Custom Duration (optional, e.g. 4.5)</label>
+                    <input
+                      type="text"
+                      name="customDuration"
+                      value={formData.customDuration || ''}
+                      onChange={handleAddInputChange}
+                      className="input-field"
+                      style={{ padding: '10px 16px', fontSize: '13px' }}
+                      placeholder="Override duration, e.g. 4.5 Years"/>
                   </div>
 
                   {/* University Name */}
@@ -1105,11 +1270,7 @@
                         autoComplete="off"
                       />
                       {formData.universityName && (
-                        <button
-                          type="button"
-                          className="univ-clear-btn"
-                          onClick={clearUniversityFields}
-                          title="Clear university">
+                        <button type="button" className="univ-clear-btn" onClick={clearUniversityFields} title="Clear university">
                           <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/>
                           </svg>
@@ -1137,9 +1298,17 @@
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{univ.name}</div>
-                              {univ._qsRank && univ._qsRank !== 'N/A' && (
-                                <div style={{ fontSize: '11px', color: '#d97706', fontWeight: 700, marginTop: '2px' }}>⭐ QS #{univ._qsRank}</div>
-                              )}
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                                {univ._qsRank && univ._qsRank !== 'N/A' && (
+                                  <span style={{ fontSize: '11px', color: '#d97706', fontWeight: 700 }}>⭐ QS #{univ._qsRank}</span>
+                                )}
+                                {univ._qsCity && (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-2)' }}>📍 {univ._qsCity}</span>
+                                )}
+                                {univ._qsCountry && (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-2)' }}>{univ._qsCountry}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1166,18 +1335,7 @@
                     <label className="label">Program Title <span style={{ color: 'var(--danger)' }}>*</span></label>
                     <input type="text" name="programName" value={formData.programName}
                       onChange={handleAddInputChange} className="input-field"
-                      placeholder="e.g. BSc in Computer Science" required/>
-                  </div>
-
-                  {/* Duration */}
-                  <div>
-                    <label className="label">Duration</label>
-                    <select name="duration" value={formData.duration}
-                      onChange={handleAddInputChange} className="input-field">
-                      {[1,2,3,4,5].map(y => (
-                        <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
-                      ))}
-                    </select>
+                      placeholder="e.g. Computer Science" required/>
                   </div>
 
                   {/* Language */}
@@ -1190,11 +1348,6 @@
                       <option>Bilingual (Ar+En)</option>
                       <option value="Others">Others…</option>
                     </select>
-                    {formData.language === 'Others' && (
-                      <input type="text" name="customLanguage" value={formData.customLanguage}
-                        onChange={handleAddInputChange} className="input-field"
-                        style={{ marginTop: '8px' }} placeholder="Specify language…" required/>
-                    )}
                   </div>
 
                   {/* Gender */}
@@ -1207,6 +1360,14 @@
                       <option value="Female">Female</option>
                     </select>
                   </div>
+
+                  {formData.language === 'Others' && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <input type="text" name="customLanguage" value={formData.customLanguage || ''}
+                        onChange={handleAddInputChange}
+                        className="input-field" placeholder="Specify language…"/>
+                    </div>
+                  )}
 
                 </div>
 
@@ -1223,13 +1384,13 @@
 
             {/* Print-only header */}
             <div style={{ display: 'none' }} className="print-header">
-              StudyTrack — University Preference List
+              ProgramsTracker — University Preference List
             </div>
             <div style={{ display: 'none' }} className="print-subtitle">
               {preferences.length} programs · Generated {new Date().toLocaleDateString()}
             </div>
 
-            {/* ── Preference List ───────────────────────────────────── */}
+            {/* Preference List header */}
             <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', margin: 0 }}>
                 Preference List
@@ -1249,6 +1410,7 @@
               )}
             </div>
 
+            {/* Preference Cards */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {preferences.length === 0 ? (
                 <div className="print-hidden" style={{
@@ -1268,19 +1430,22 @@
                 preferences.map((pref, index) => (
                   <div
                     key={pref.id}
-                    className="card prog-card-enter print-card"
+                    className={`card prog-card-enter print-card ${degreeCardClass(pref.degreeType)}`}
                     style={{ padding: '18px 20px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
 
-                    {/* Number badge */}
-                    <div className="num-badge" style={{ marginTop: '2px' }}>#{index + 1}</div>
+                    {/* Number badge — degree themed */}
+                    <div className={`num-badge ${degreeBadgeNumClass(pref.degreeType)}`} style={{ marginTop: '2px' }}>
+                      #{index + 1}
+                    </div>
 
                     {editingId !== pref.id ? (
-                      /* ── View mode ── */
+                      /* View mode */
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            {/* Logo + Name + QS Rank row */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
+
+                            {/* Logo + University Name + Rank row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                               {pref.logoUrl && (
                                 <div style={{ width: 32, height: 32, borderRadius: '8px', overflow: 'hidden', background: 'white', border: '1px solid var(--border)', flexShrink: 0 }}>
                                   <img src={pref.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.parentElement.style.display='none'}/>
@@ -1292,6 +1457,24 @@
                               <span className={`rank-badge ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'rank-num' : 'rank-na'}`}>
                                 ⭐ QS {pref.qsRanking || 'N/A'}
                               </span>
+                              {/* Rank growth indicator */}
+                              {pref.qsRanking && pref.prevRank && (
+                                <RankGrowth current={pref.qsRanking} previous={pref.prevRank} />
+                              )}
+                              {/* Overall score pill */}
+                              {isValidScore(pref.overallScore) && (
+                                <span className="score-pill">◎ {parseFloat(pref.overallScore).toFixed(1)}</span>
+                              )}
+                            </div>
+
+                            {/* Program name — bold & styled */}
+                            <div className="program-name" style={{
+                              marginBottom: '8px',
+                              color: pref.degreeType === 'Bachelor' ? 'var(--bachelor-accent)'
+                                   : pref.degreeType === "Master's" ? 'var(--masters-accent)'
+                                   : 'var(--phd-accent)'
+                            }}>
+                              {pref.degreeType} in {pref.programName}
                             </div>
 
                             {/* Badges row */}
@@ -1301,19 +1484,25 @@
                                   📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
                                 </span>
                               )}
-                              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', border: '1px solid #d4caff', borderRadius: '8px', padding: '3px 10px' }}>
-                                {pref.degreeType}
+                              <span style={{
+                                fontSize: '11px', fontWeight: 700, borderRadius: '8px', padding: '3px 10px',
+                                color: pref.degreeType === 'Bachelor' ? 'var(--bachelor-accent)' : pref.degreeType === "Master's" ? 'var(--masters-accent)' : 'var(--phd-accent)',
+                                background: pref.degreeType === 'Bachelor' ? 'var(--bachelor-bg)' : pref.degreeType === "Master's" ? 'var(--masters-bg)' : 'var(--phd-bg)',
+                                border: `1px solid ${pref.degreeType === 'Bachelor' ? 'var(--bachelor-border)' : pref.degreeType === "Master's" ? 'var(--masters-border)' : 'var(--phd-border)'}`,
+                              }}>
+                                {pref.degreeType === 'Bachelor' ? '🎓' : pref.degreeType === "Master's" ? '📘' : '🔬'} {pref.degreeType}
                               </span>
-                              {pref.gender && pref.gender !== 'Both' && (
-                                <span style={{ fontSize: '11px', fontWeight: 600, color: pref.gender === 'Male' ? '#1d4ed8' : '#be185d', background: pref.gender === 'Male' ? '#dbeafe' : '#fce7f3', border: `1px solid ${pref.gender === 'Male' ? '#93c5fd' : '#f9a8d4'}`, borderRadius: '8px', padding: '3px 10px' }}>
-                                  {pref.gender === 'Male' ? '♂ Male' : '♀ Female'}
+                              {/* Gender — show for ALL including Both */}
+                              {pref.gender && (
+                                <span style={{
+                                  fontSize: '11px', fontWeight: 600, borderRadius: '8px', padding: '3px 10px',
+                                  color: pref.gender === 'Male' ? '#1d4ed8' : pref.gender === 'Female' ? '#be185d' : '#7c3aed',
+                                  background: pref.gender === 'Male' ? '#dbeafe' : pref.gender === 'Female' ? '#fce7f3' : '#f5f3ff',
+                                  border: `1px solid ${pref.gender === 'Male' ? '#93c5fd' : pref.gender === 'Female' ? '#f9a8d4' : '#d4caff'}`,
+                                }}>
+                                  {pref.gender === 'Male' ? '♂ Male' : pref.gender === 'Female' ? '♀ Female' : '⚥ Both'}
                                 </span>
                               )}
-                            </div>
-
-                            {/* Program — "Bachelor in X" format */}
-                            <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
-                              {pref.degreeType} in {pref.programName}
                             </div>
 
                             {/* Meta tags */}
@@ -1359,7 +1548,7 @@
                         </div>
                       </div>
                     ) : (
-                      /* ── Edit mode ── */
+                      /* Edit mode */
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                           <input type="text" value={editFormData.universityName}
@@ -1369,7 +1558,7 @@
                             onChange={e => setEditFormData({...editFormData, programName: e.target.value})}
                             className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Program Title"/>
                           <select value={editFormData.degreeType}
-                            onChange={e => setEditFormData({...editFormData, degreeType: e.target.value})}
+                            onChange={e => setEditFormData({...editFormData, degreeType: e.target.value, duration: DEFAULT_DURATION[e.target.value] || '4 Years'})}
                             className="input-field">
                             <option>Bachelor</option><option>Master's</option><option>PhD</option>
                           </select>
@@ -1385,10 +1574,13 @@
                           <select value={editFormData.duration}
                             onChange={e => setEditFormData({...editFormData, duration: e.target.value})}
                             className="input-field">
-                            {[1,2,3,4,5].map(y => (
-                              <option key={y} value={`${y} Year${y>1?'s':''}`}>{y} Year{y>1?'s':''}</option>
+                            {(DURATION_OPTIONS[editFormData.degreeType] || DURATION_OPTIONS['Bachelor']).map(y => (
+                              <option key={y} value={y}>{y}</option>
                             ))}
                           </select>
+                          <input type="text" value={editFormData.customDuration || ''}
+                            onChange={e => setEditFormData({...editFormData, customDuration: e.target.value})}
+                            className="input-field" placeholder="Custom duration (e.g. 4.5)"/>
                           <select value={editFormData.language}
                             onChange={e => setEditFormData({...editFormData, language: e.target.value})}
                             className="input-field">
@@ -1396,11 +1588,6 @@
                             <option>Bilingual (Ar+En)</option>
                             <option value="Others">Others…</option>
                           </select>
-                          {editFormData.language === 'Others' && (
-                            <input type="text" value={editFormData.customLanguage || ''}
-                              onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
-                              className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Specify language…"/>
-                          )}
                           <select value={editFormData.gender || 'Both'}
                             onChange={e => setEditFormData({...editFormData, gender: e.target.value})}
                             className="input-field">
@@ -1408,6 +1595,11 @@
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
                           </select>
+                          {editFormData.language === 'Others' && (
+                            <input type="text" value={editFormData.customLanguage || ''}
+                              onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
+                              className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Specify language…"/>
+                          )}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                           <button onClick={() => setEditingId(null)} className="btn-ghost">Cancel</button>
@@ -1419,9 +1611,16 @@
                 ))
               )}
             </div>
+
+            {/* Footer credit */}
+            <div className="dev-credit">
+              ProgramsTracker · Developed by{' '}
+              <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" rel="noopener noreferrer">RAHAT</a>
+            </div>
+
           </main>
 
-          {/* ── Cloud Sync Modal ─────────────────────────────────────── */}
+          {/* Cloud Sync Modal */}
           {showSyncModal && (
             <div style={{
               position: 'fixed', inset: 0,
