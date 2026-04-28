@@ -11,6 +11,8 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- HTML2PDF for direct PDF downloading -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   
   <style>
@@ -50,31 +52,62 @@
 
     h1,h2,h3,h4 { font-family: 'Bricolage Grotesque', sans-serif; }
 
+    /* Print & PDF Export Styles */
     @media print {
-      body { background: white !important; background-image: none !important; }
+      body, html, #root { 
+        height: auto !important; 
+        min-height: auto !important; 
+        background: white !important; 
+        display: block !important;
+      }
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      main { display: block !important; padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
       .print-hidden { display: none !important; }
+      .print-flex-block { display: block !important; }
+      .print-flex-block > div { margin-bottom: 16px !important; }
       .print-card {
         box-shadow: none !important;
         border: 1px solid #e2e8f0 !important;
         border-radius: 12px !important;
-        break-inside: avoid;
-        margin-bottom: 16px;
         page-break-inside: avoid;
+        break-inside: avoid;
       }
-      .print-header {
-        display: block !important;
-        font-family: 'Bricolage Grotesque', sans-serif;
-        font-size: 22px;
-        font-weight: 800;
-        color: #1a1730;
-        margin-bottom: 4px;
-      }
-      .print-subtitle {
-        display: block !important;
-        font-size: 13px;
-        color: #6b6888;
-        margin-bottom: 20px;
-      }
+    }
+
+    /* Styles specifically for html2pdf rendering */
+    .is-exporting-pdf {
+      background: white !important;
+      padding: 20px !important;
+    }
+    .is-exporting-pdf * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .is-exporting-pdf .print-hidden { display: none !important; }
+    .is-exporting-pdf .hide-on-screen { display: block !important; }
+    .is-exporting-pdf .print-flex-block { display: block !important; }
+    .is-exporting-pdf .print-flex-block > div { margin-bottom: 16px !important; break-inside: avoid; page-break-inside: avoid; }
+    .is-exporting-pdf .print-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+
+    /* Helper class to show header only during print/pdf */
+    .hide-on-screen { display: none; }
+    @media print { .hide-on-screen { display: block !important; } }
+
+    .print-header {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #1a1730;
+      margin-bottom: 4px;
+    }
+    .print-subtitle {
+      font-size: 13px;
+      color: #6b6888;
+      margin-bottom: 24px;
     }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -96,297 +129,146 @@
     }
     .card:hover { border-color: #c5bef5; box-shadow: 0 8px 32px rgba(91,79,255,0.08); }
 
-    .card-bachelor {
-      background: linear-gradient(135deg, #ffffff 0%, #f0f5ff 100%);
-      border-color: var(--bachelor-border);
-    }
+    .card-bachelor { background: linear-gradient(135deg, #ffffff 0%, #f0f5ff 100%); border-color: var(--bachelor-border); }
     .card-bachelor:hover { border-color: #93c5fd; box-shadow: 0 8px 32px rgba(29,78,216,0.1); }
-    .card-masters {
-      background: linear-gradient(135deg, #ffffff 0%, #fff5f7 100%);
-      border-color: var(--masters-border);
-    }
+    .card-masters { background: linear-gradient(135deg, #ffffff 0%, #fff5f7 100%); border-color: var(--masters-border); }
     .card-masters:hover { border-color: #f9a8d4; box-shadow: 0 8px 32px rgba(190,24,93,0.1); }
-    .card-phd {
-      background: linear-gradient(135deg, #ffffff 0%, #fffdf0 100%);
-      border-color: var(--phd-border);
-    }
+    .card-phd { background: linear-gradient(135deg, #ffffff 0%, #fffdf0 100%); border-color: var(--phd-border); }
     .card-phd:hover { border-color: #fcd34d; box-shadow: 0 8px 32px rgba(180,83,9,0.1); }
 
     .input-field {
-      width: 100%;
-      padding: 13px 16px;
-      background: var(--surface-2);
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      font-family: 'DM Sans', sans-serif;
-      font-weight: 500;
-      font-size: 14px;
-      color: var(--text);
-      outline: none;
-      transition: all 0.25s ease;
+      width: 100%; padding: 13px 16px; background: var(--surface-2); border: 1.5px solid var(--border);
+      border-radius: 12px; font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 14px;
+      color: var(--text); outline: none; transition: all 0.25s ease;
     }
-    .input-field:focus {
-      background: white;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(91,79,255,0.12);
-    }
+    .input-field:focus { background: white; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,79,255,0.12); }
     .input-field::placeholder { color: #b0adc8; font-weight: 400; }
     select.input-field { cursor: pointer; }
 
     .label {
-      display: block;
-      font-size: 10.5px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-2);
-      margin-bottom: 8px;
+      display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-2); margin-bottom: 8px;
       font-family: 'Bricolage Grotesque', sans-serif;
     }
 
     .btn-primary {
-      background: var(--accent);
-      color: white;
-      font-family: 'Bricolage Grotesque', sans-serif;
-      font-weight: 700;
-      border-radius: 12px;
-      padding: 13px 24px;
-      cursor: pointer;
-      border: none;
-      transition: all 0.25s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
+      background: var(--accent); color: white; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700;
+      border-radius: 12px; padding: 13px 24px; cursor: pointer; border: none; transition: all 0.25s ease;
+      display: inline-flex; align-items: center; gap: 8px; font-size: 14px;
     }
     .btn-primary:hover { background: var(--accent-mid); box-shadow: 0 4px 16px rgba(91,79,255,0.3); transform: translateY(-1px); }
     .btn-primary:active { transform: scale(0.97); }
 
     .btn-ghost {
-      background: white;
-      color: var(--text-2);
-      font-weight: 600;
-      border-radius: 12px;
-      padding: 10px 18px;
-      cursor: pointer;
-      border: 1.5px solid var(--border);
-      transition: all 0.25s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 13px;
-      font-family: 'DM Sans', sans-serif;
+      background: white; color: var(--text-2); font-weight: 600; border-radius: 12px; padding: 10px 18px;
+      cursor: pointer; border: 1.5px solid var(--border); transition: all 0.25s ease;
+      display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-family: 'DM Sans', sans-serif;
     }
     .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 
     .btn-green {
-      background: #ecfdf5;
-      color: #059669;
-      font-weight: 700;
-      border-radius: 12px;
-      padding: 10px 18px;
-      cursor: pointer;
-      border: 1.5px solid #a7f3d0;
-      transition: all 0.25s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 13px;
-      font-family: 'DM Sans', sans-serif;
+      background: #ecfdf5; color: #059669; font-weight: 700; border-radius: 12px; padding: 10px 18px;
+      cursor: pointer; border: 1.5px solid #a7f3d0; transition: all 0.25s ease;
+      display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-family: 'DM Sans', sans-serif;
     }
     .btn-green:hover { background: #059669; color: white; border-color: #059669; }
 
     .btn-red {
-      background: #fef2f2;
-      color: #dc2626;
-      font-weight: 700;
-      border-radius: 12px;
-      padding: 10px 18px;
-      cursor: pointer;
-      border: 1.5px solid #fecaca;
-      transition: all 0.25s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 13px;
-      font-family: 'DM Sans', sans-serif;
+      background: #fef2f2; color: #dc2626; font-weight: 700; border-radius: 12px; padding: 10px 18px;
+      cursor: pointer; border: 1.5px solid #fecaca; transition: all 0.25s ease;
+      display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-family: 'DM Sans', sans-serif;
     }
     .btn-red:hover { background: #dc2626; color: white; border-color: #dc2626; }
 
+    .btn-blue {
+      background: #eff6ff; color: #2563eb; font-weight: 700; border-radius: 12px; padding: 10px 18px;
+      cursor: pointer; border: 1.5px solid #bfdbfe; transition: all 0.25s ease;
+      display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-family: 'DM Sans', sans-serif;
+    }
+    .btn-blue:hover { background: #2563eb; color: white; border-color: #2563eb; }
+
     .spinner {
-      width: 15px; height: 15px;
-      border: 2px solid rgba(91,79,255,0.25);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
+      width: 15px; height: 15px; border: 2px solid rgba(91,79,255,0.25); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .rank-badge {
-      font-family: 'Bricolage Grotesque', sans-serif;
-      font-weight: 800;
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 8px;
-    }
+    .rank-badge { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 11px; padding: 3px 10px; border-radius: 8px; }
     .rank-num { background: #fff8e6; color: var(--gold); border: 1px solid #fde68a; }
     .rank-na  { background: #f3f4f6; color: #9ca3af; border: 1px solid #e5e7eb; }
 
     .icon-btn {
-      width: 34px; height: 34px;
-      border-radius: 10px;
-      border: 1.5px solid var(--border);
-      background: white;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: var(--text-2);
+      width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--border); background: white;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; color: var(--text-2);
     }
     .icon-btn:hover { border-color: var(--accent); background: var(--accent-light); color: var(--accent); transform: scale(1.05); }
     .icon-btn.danger:hover { border-color: #fca5a5; background: #fff1f2; color: var(--danger); }
     .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; transform: none; }
 
     .univ-clear-btn {
-      position: absolute; right: 12px; top: 50%;
-      transform: translateY(-50%);
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      background: #e0dcf5;
-      border: none;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: var(--text-2);
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px;
+      border-radius: 50%; background: #e0dcf5; border: none; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s ease; color: var(--text-2);
     }
     .univ-clear-btn:hover { background: var(--accent); color: white; transform: translateY(-50%) scale(1.1); }
 
     .toast-enter { animation: toastIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
-    @keyframes toastIn {
-      from { opacity: 0; transform: translate(-50%, -20px) scale(0.9); }
-      to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
-    }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -20px) scale(0.9); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 
     .prog-card-enter { animation: cardIn 0.4s cubic-bezier(0.34,1.26,0.64,1) both; }
-    @keyframes cardIn {
-      from { opacity: 0; transform: translateY(15px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
     .modal-overlay {
-      position: fixed; inset: 0;
-      background: rgba(26,23,48,0.5);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      z-index: 9998;
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-      animation: fadeIn 0.2s ease-out both;
+      position: fixed; inset: 0; background: rgba(26,23,48,0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      z-index: 9998; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s ease-out both;
     }
     .modal-content {
-      background: white; border-radius: 24px; padding: 32px;
-      max-width: 420px; width: 100%;
-      box-shadow: 0 24px 80px rgba(91,79,255,0.25);
-      position: relative;
-      animation: scaleUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+      background: white; border-radius: 24px; padding: 32px; max-width: 420px; width: 100%;
+      box-shadow: 0 24px 80px rgba(91,79,255,0.25); position: relative; animation: scaleUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes scaleUp { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
-    .fade-slide-enter {
-      animation: fadeSlide 0.3s ease-out both;
-    }
+    .fade-slide-enter { animation: fadeSlide 0.3s ease-out both; }
     @keyframes fadeSlide {
       from { opacity: 0; transform: translateY(-10px); max-height: 0; margin-top: 0; overflow: hidden; }
       to { opacity: 1; transform: translateY(0); max-height: 100px; margin-top: 14px; overflow: visible; }
     }
 
     .suggestion-item {
-      padding: 10px 16px;
-      display: flex; align-items: center; gap: 12px;
-      cursor: pointer;
-      transition: background 0.15s ease;
-      border-bottom: 1px solid #f5f3ff;
+      padding: 10px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.15s ease; border-bottom: 1px solid #f5f3ff;
     }
     .suggestion-item:last-child { border-bottom: none; }
     .suggestion-item:hover { background: var(--surface-2); }
 
     .num-badge {
-      font-family: 'Bricolage Grotesque', sans-serif;
-      font-weight: 800;
-      width: 44px; height: 44px;
-      border-radius: 14px;
-      background: var(--accent);
-      color: white;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-      flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(91,79,255,0.3);
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; width: 44px; height: 44px; border-radius: 14px;
+      background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 16px;
+      flex-shrink: 0; box-shadow: 0 4px 12px rgba(91,79,255,0.3);
     }
 
     .num-badge-bachelor { background: linear-gradient(135deg, #1d4ed8, #3b82f6); box-shadow: 0 4px 12px rgba(29,78,216,0.3); }
     .num-badge-masters  { background: linear-gradient(135deg, #be185d, #ec4899); box-shadow: 0 4px 12px rgba(190,24,93,0.3); }
     .num-badge-phd      { background: linear-gradient(135deg, #b45309, #f59e0b); box-shadow: 0 4px 12px rgba(180,83,9,0.3); }
 
-    .program-name {
-      font-family: 'Bricolage Grotesque', sans-serif;
-      font-weight: 800;
-      font-size: 14px;
-      letter-spacing: -0.01em;
-    }
+    .program-name { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: -0.01em; }
 
     .degree-tab {
-      flex: 1;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1.5px solid var(--border);
-      background: white;
-      font-family: 'Bricolage Grotesque', sans-serif;
-      font-weight: 700;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.25s ease;
-      text-align: center;
-      color: var(--text-2);
+      flex: 1; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--border); background: white;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.25s ease; text-align: center; color: var(--text-2);
     }
     .degree-tab:hover { background: var(--surface-2); }
     .degree-tab.active-bachelor { background: var(--bachelor-bg); border-color: var(--bachelor-border); color: var(--bachelor-accent); }
     .degree-tab.active-masters  { background: var(--masters-bg);  border-color: var(--masters-border);  color: var(--masters-accent); }
     .degree-tab.active-phd      { background: var(--phd-bg);      border-color: var(--phd-border);      color: var(--phd-accent); }
 
-    .rank-growth {
-      font-size: 9.5px;
-      font-weight: 800;
-      font-family: 'Bricolage Grotesque', sans-serif;
-      padding: 1px 5px;
-      border-radius: 5px;
-      display: inline-flex;
-      align-items: center;
-      gap: 1px;
-      flex-shrink: 0;
-    }
+    .rank-growth { font-size: 9.5px; font-weight: 800; font-family: 'Bricolage Grotesque', sans-serif; padding: 1px 5px; border-radius: 5px; display: inline-flex; align-items: center; gap: 1px; flex-shrink: 0; }
     .rank-up   { color: #059669; background: #d1fae5; }
     .rank-down { color: #dc2626; background: #fee2e2; }
 
-    .score-pill {
-      font-size: 9.5px;
-      font-weight: 700;
-      font-family: 'Bricolage Grotesque', sans-serif;
-      padding: 1px 6px;
-      border-radius: 5px;
-      background: #f3f0ff;
-      color: var(--accent);
-      border: 1px solid #d4caff;
-      display: inline-flex;
-      align-items: center;
-    }
+    .score-pill { font-size: 9.5px; font-weight: 700; font-family: 'Bricolage Grotesque', sans-serif; padding: 1px 6px; border-radius: 5px; background: #f3f0ff; color: var(--accent); border: 1px solid #d4caff; display: inline-flex; align-items: center; }
 
-    .dev-credit {
-      text-align: center;
-      font-size: 12px;
-      color: var(--text-2);
-      padding: 20px 0 8px;
-    }
+    .dev-credit { text-align: center; font-size: 12px; color: var(--text-2); padding: 20px 0 8px; }
     .dev-credit a { color: var(--accent); font-weight: 700; text-decoration: none; transition: color 0.2s ease; }
     .dev-credit a:hover { color: var(--accent-mid); text-decoration: underline; }
   </style>
@@ -397,7 +279,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
 
-    // helper functions
     const parseRank = (rank) => {
       if (!rank || rank.toString().toUpperCase() === 'N/A') return Infinity;
       const match = rank.toString().match(/\d+/);
@@ -417,8 +298,7 @@
       const cur = parseRankStart(currentRank);
       const prv = parseRankStart(prevRank);
       if (cur === null || prv === null) return null;
-      const diff = prv - cur;
-      return diff;
+      return prv - cur;
     };
 
     function useDebounce(value, delay) {
@@ -476,7 +356,6 @@
       return null;
     };
 
-    // options configurations
     const DURATION_OPTIONS = {
       'Bachelor':  ['3 Years', '4 Years', '5 Years', '6 Years', '7 Years', 'Custom'],
       "Master's":  ['1 Year', '2 Years', '3 Years', 'Custom'],
@@ -553,7 +432,6 @@
       return db;
     };
 
-    // main app component
     const App = () => {
       const [preferences, setPreferences] = useState(() => {
         try {
@@ -586,13 +464,14 @@
       };
 
       const [formData, setFormData] = useState(defaultForm);
-      const [editingId,    setEditingId]    = useState(null);
+      const [editingId, setEditingId] = useState(null);
       const [editFormData, setEditFormData] = useState({});
-      const [showSyncModal,setShowSyncModal] = useState(false);
-      const [itemToDelete, setItemToDelete] = useState(null); // stores id to delete
-      const [syncLink,     setSyncLink]     = useState('');
-      const [toast,        setToast]        = useState(null);
-      const [suggestions,  setSuggestions]  = useState([]);
+      const [showSyncModal, setShowSyncModal] = useState(false);
+      const [itemToDelete, setItemToDelete] = useState(null); 
+      const [showClearAllModal, setShowClearAllModal] = useState(false); // Modal state for clear all
+      const [syncLink, setSyncLink] = useState('');
+      const [toast, setToast] = useState(null);
+      const [suggestions, setSuggestions] = useState([]);
       const [showSuggestions, setShowSuggestions] = useState(false);
 
       const suggestionRef  = useRef(null);
@@ -741,12 +620,6 @@
       const sortByRank = (list) =>
         [...list].sort((a, b) => parseRank(a.qsRanking) - parseRank(b.qsRanking));
 
-      const extractDomain = (url) => {
-        if (!url) return null;
-        try { return new URL(url).hostname.replace('www.', ''); } catch { return null; }
-      };
-
-      // form event handlers
       const handleAddInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -788,7 +661,7 @@
             const cd = data.customDuration.trim();
             return cd.includes('Year') || cd.includes('year') ? cd : `${cd} Years`;
           }
-          return ''; // or default fallback
+          return '';
         }
         return data.duration;
       };
@@ -833,14 +706,7 @@
       };
 
       const clearUniversityFields = () => {
-        setFormData(prev => ({
-          ...prev,
-          universityName: '',
-          qsRanking: '',
-          cityState: '',
-          country: '',
-          logoUrl: ''
-        }));
+        setFormData(prev => ({ ...prev, universityName: '', qsRanking: '', cityState: '', country: '', logoUrl: '' }));
         setSuggestions([]);
       };
 
@@ -896,7 +762,6 @@
         showToast('List sorted by QS Ranking.');
       };
 
-      // cloud sync logic
       const [isShortening, setIsShortening] = useState(false);
 
       const generateCloudLink = async () => {
@@ -935,6 +800,34 @@
         link.href = URL.createObjectURL(blob);
         link.download = `ProgramsTracker_${genFileId()}.csv`;
         link.click();
+      };
+
+      // HTML2PDF integration for Direct Export PDF
+      const handleExportPDF = () => {
+        if(preferences.length === 0) {
+          showToast('Your list is empty. Add programs first.', 'warn');
+          return;
+        }
+        
+        const element = document.getElementById('pdf-export-area');
+        element.classList.add('is-exporting-pdf');
+        
+        const opt = {
+          margin:       0.4,
+          filename:     `ProgramsTracker_${genFileId()}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+        
+        showToast('Generating PDF...', 'success');
+        
+        html2pdf().set(opt).from(element).save().then(() => {
+          element.classList.remove('is-exporting-pdf');
+        }).catch(err => {
+          element.classList.remove('is-exporting-pdf');
+          showToast('Error generating PDF.', 'error');
+        });
       };
 
       const parseImportedRows = (rows) => {
@@ -1068,10 +961,7 @@
                   Programs<span style={{ color: 'var(--accent)' }}>Tracker</span>
                 </span>
               </div>
-              <button
-                onClick={() => { setShowSyncModal(true); generateCloudLink(); }}
-                className="btn-ghost"
-                style={{ fontSize: '12.5px' }}>
+              <button onClick={() => { setShowSyncModal(true); generateCloudLink(); }} className="btn-ghost" style={{ fontSize: '12.5px' }}>
                 <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                 </svg>
@@ -1097,7 +987,7 @@
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                   </svg>
-                  Import CSV/XLSX
+                  Import CSV
                 </label>
                 <button onClick={handleExportCSV} className="btn-green">
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1105,11 +995,17 @@
                   </svg>
                   Export CSV
                 </button>
-                <button onClick={() => window.print()} className="btn-red">
+                <button onClick={handleExportPDF} className="btn-red">
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  Export PDF
+                </button>
+                <button onClick={() => window.print()} className="btn-blue">
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                   </svg>
-                  Export PDF
+                  Print
                 </button>
               </div>
             </div>
@@ -1363,227 +1259,241 @@
               </form>
             </div>
 
-            <div style={{ display: 'none' }} className="print-header">
-              ProgramsTracker — University Preference List
-            </div>
-            <div style={{ display: 'none' }} className="print-subtitle">
-              {preferences.length} programs · Generated {new Date().toLocaleDateString()}
-            </div>
+            {/* Area specifically targeted for PDF generation and Printing */}
+            <div id="pdf-export-area">
+              
+              <div className="print-header hide-on-screen">
+                ProgramsTracker — University Preference List
+              </div>
+              <div className="print-subtitle hide-on-screen">
+                {preferences.length} programs · Generated {new Date().toLocaleDateString()}
+              </div>
 
-            <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', margin: 0 }}>
-                Preference List
-                {preferences.length > 0 && (
-                  <span style={{ fontSize: '13px', fontFamily: 'DM Sans', fontWeight: 600, color: 'var(--text-2)', marginLeft: '8px' }}>
-                    ({preferences.length})
-                  </span>
-                )}
-              </h3>
-              {preferences.length > 1 && (
-                <button onClick={handleSortClick} className="btn-ghost" style={{ fontSize: '12px', color: 'var(--accent)' }}>
-                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-                  </svg>
-                  Sort by Rank
-                </button>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {preferences.length === 0 ? (
-                <div className="print-hidden" style={{
-                  textAlign: 'center', padding: '64px 20px',
-                  background: 'white', borderRadius: '20px',
-                  border: '1.5px dashed var(--border)'
-                }}>
-                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎓</div>
-                  <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', marginBottom: '6px' }}>
-                    Your list is empty
-                  </h3>
-                  <p style={{ color: 'var(--text-2)', fontSize: '13.5px' }}>
-                    Search and add your target universities above.
-                  </p>
+              <div className="print-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', margin: 0 }}>
+                  Preference List
+                  {preferences.length > 0 && (
+                    <span style={{ fontSize: '13px', fontFamily: 'DM Sans', fontWeight: 600, color: 'var(--text-2)', marginLeft: '8px' }}>
+                      ({preferences.length})
+                    </span>
+                  )}
+                </h3>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {preferences.length > 1 && (
+                    <button onClick={handleSortClick} className="btn-ghost" style={{ fontSize: '12px', color: 'var(--accent)' }}>
+                      <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                      </svg>
+                      Sort by Rank
+                    </button>
+                  )}
+                  {preferences.length > 0 && (
+                    <button onClick={() => setShowClearAllModal(true)} className="btn-ghost" style={{ fontSize: '12px', color: 'var(--danger)', borderColor: '#fecaca', background: '#fef2f2' }}>
+                      <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                      </svg>
+                      Clear All
+                    </button>
+                  )}
                 </div>
-              ) : (
-                preferences.map((pref, index) => (
-                  <div
-                    key={pref.id}
-                    className={`card prog-card-enter print-card ${degreeCardClass(pref.degreeType)}`}
-                    style={{ padding: '18px 20px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+              </div>
 
-                    <div className={`num-badge ${degreeBadgeNumClass(pref.degreeType)}`} style={{ marginTop: '2px' }}>
-                      #{index + 1}
-                    </div>
-
-                    {editingId !== pref.id ? (
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                              {pref.logoUrl && (
-                                <div style={{ width: 32, height: 32, borderRadius: '8px', overflow: 'hidden', background: 'white', border: '1px solid var(--border)', flexShrink: 0 }}>
-                                  <img src={pref.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.parentElement.style.display='none'}/>
-                                </div>
-                              )}
-                              <h4 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '15px', color: 'var(--text)', margin: 0, lineHeight: '1.3' }}>
-                                {pref.universityName}
-                              </h4>
-                              <span className={`rank-badge ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'rank-num' : 'rank-na'}`}>
-                                ⭐ QS {pref.qsRanking || 'N/A'}
-                              </span>
-                              {pref.qsRanking && pref.prevRank && (
-                                <RankGrowth current={pref.qsRanking} previous={pref.prevRank} />
-                              )}
-                              {isValidScore(pref.overallScore) && (
-                                <span className="score-pill">◎ {parseFloat(pref.overallScore).toFixed(1)}</span>
-                              )}
-                            </div>
-
-                            <div className="program-name" style={{
-                              marginBottom: '8px',
-                              color: pref.degreeType === 'Bachelor' ? 'var(--bachelor-accent)'
-                                   : pref.degreeType === "Master's" ? 'var(--masters-accent)'
-                                   : 'var(--phd-accent)'
-                            }}>
-                              {pref.degreeType} in {pref.programName}
-                            </div>
-
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                              {(pref.cityState || pref.country) && (
-                                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', padding: '3px 10px' }}>
-                                  📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
-                                </span>
-                              )}
-                              <span style={{
-                                fontSize: '11px', fontWeight: 700, borderRadius: '8px', padding: '3px 10px',
-                                color: pref.degreeType === 'Bachelor' ? 'var(--bachelor-accent)' : pref.degreeType === "Master's" ? 'var(--masters-accent)' : 'var(--phd-accent)',
-                                background: pref.degreeType === 'Bachelor' ? 'var(--bachelor-bg)' : pref.degreeType === "Master's" ? 'var(--masters-bg)' : 'var(--phd-bg)',
-                                border: `1px solid ${pref.degreeType === 'Bachelor' ? 'var(--bachelor-border)' : pref.degreeType === "Master's" ? 'var(--masters-border)' : 'var(--phd-border)'}`,
-                              }}>
-                                {pref.degreeType === 'Bachelor' ? '🎓' : pref.degreeType === "Master's" ? '📘' : '🔬'} {pref.degreeType}
-                              </span>
-                              {pref.gender && (
-                                <span style={{
-                                  fontSize: '11px', fontWeight: 600, borderRadius: '8px', padding: '3px 10px',
-                                  color: pref.gender === 'Male' ? '#1d4ed8' : pref.gender === 'Female' ? '#be185d' : '#7c3aed',
-                                  background: pref.gender === 'Male' ? '#dbeafe' : pref.gender === 'Female' ? '#fce7f3' : '#f5f3ff',
-                                  border: `1px solid ${pref.gender === 'Male' ? '#93c5fd' : pref.gender === 'Female' ? '#f9a8d4' : '#d4caff'}`,
-                                }}>
-                                  {pref.gender === 'Male' ? '♂ Male' : pref.gender === 'Female' ? '♀ Female' : '👥 Both'}
-                                </span>
-                              )}
-                            </div>
-
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                              {pref.duration && (
-                                <span style={{ fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px 8px', fontWeight: 500 }}>
-                                  ⏱ {pref.duration}
-                                </span>
-                              )}
-                              {pref.language && (
-                                <span style={{ fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px 8px', fontWeight: 500 }}>
-                                  🌐 {pref.language}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="print-hidden" style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-                            <div style={{ display: 'flex', gap: '5px' }}>
-                              <button className="icon-btn" onClick={() => movePreference(index, 'up')} disabled={index === 0} title="Move Up">
-                                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/>
-                                </svg>
-                              </button>
-                              <button className="icon-btn" onClick={() => movePreference(index, 'down')} disabled={index === preferences.length - 1} title="Move Down">
-                                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/>
-                                </svg>
-                              </button>
-                            </div>
-                            <button className="icon-btn" onClick={() => startEditing(pref)} title="Edit">
-                              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                              </svg>
-                            </button>
-                            <button className="icon-btn danger" onClick={() => setItemToDelete(pref.id)} title="Delete">
-                              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ flex: 1 }} className="fade-slide-enter">
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-                          <input type="text" value={editFormData.universityName}
-                            onChange={e => setEditFormData({...editFormData, universityName: e.target.value})}
-                            className="input-field" style={{ gridColumn: '1/-1' }} placeholder="University Name"/>
-                          <input type="text" value={editFormData.programName}
-                            onChange={e => setEditFormData({...editFormData, programName: e.target.value})}
-                            className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Program Title"/>
-                          <select value={editFormData.degreeType}
-                            onChange={e => setEditFormData({...editFormData, degreeType: e.target.value, duration: DEFAULT_DURATION[e.target.value] || '4 Years'})}
-                            className="input-field">
-                            <option>Bachelor</option><option>Master's</option><option>PhD</option>
-                          </select>
-                          <input type="text" value={editFormData.qsRanking}
-                            onChange={e => setEditFormData({...editFormData, qsRanking: e.target.value})}
-                            className="input-field" placeholder="QS Rank"/>
-                          <input type="text" value={editFormData.cityState}
-                            onChange={e => setEditFormData({...editFormData, cityState: e.target.value})}
-                            className="input-field" placeholder="City/State"/>
-                          <input type="text" value={editFormData.country}
-                            onChange={e => setEditFormData({...editFormData, country: e.target.value})}
-                            className="input-field" placeholder="Country"/>
-                          <select value={editFormData.duration}
-                            onChange={e => setEditFormData({...editFormData, duration: e.target.value})}
-                            className="input-field">
-                            {(DURATION_OPTIONS[editFormData.degreeType] || DURATION_OPTIONS['Bachelor']).map(y => (
-                              <option key={y} value={y}>{y}</option>
-                            ))}
-                          </select>
-                          
-                          {editFormData.duration === 'Custom' && (
-                            <input type="text" value={editFormData.customDuration || ''}
-                              onChange={e => setEditFormData({...editFormData, customDuration: e.target.value})}
-                              className="input-field" placeholder="Custom duration (e.g. 4.5 Years)"/>
-                          )}
-
-                          <select value={editFormData.language}
-                            onChange={e => setEditFormData({...editFormData, language: e.target.value})}
-                            className="input-field">
-                            <option>English</option><option>Arabic</option>
-                            <option>Bilingual (Ar+En)</option>
-                            <option value="Others">Others…</option>
-                          </select>
-                          <select value={editFormData.gender || 'Both'}
-                            onChange={e => setEditFormData({...editFormData, gender: e.target.value})}
-                            className="input-field">
-                            <option value="Both">Both</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                          </select>
-                          {editFormData.language === 'Others' && (
-                            <input type="text" value={editFormData.customLanguage || ''}
-                              onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
-                              className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Specify language…"/>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                          <button onClick={() => setEditingId(null)} className="btn-ghost">Cancel</button>
-                          <button onClick={saveEdit} className="btn-primary" style={{ padding: '10px 20px', fontSize: '13px' }}>Save</button>
-                        </div>
-                      </div>
-                    )}
+              <div className="print-flex-block" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {preferences.length === 0 ? (
+                  <div className="print-hidden" style={{
+                    textAlign: 'center', padding: '64px 20px',
+                    background: 'white', borderRadius: '20px',
+                    border: '1.5px dashed var(--border)'
+                  }}>
+                    <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎓</div>
+                    <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', color: 'var(--text)', marginBottom: '6px' }}>
+                      Your list is empty
+                    </h3>
+                    <p style={{ color: 'var(--text-2)', fontSize: '13.5px' }}>
+                      Search and add your target universities above.
+                    </p>
                   </div>
-                ))
-              )}
+                ) : (
+                  preferences.map((pref, index) => (
+                    <div
+                      key={pref.id}
+                      className={`card prog-card-enter print-card ${degreeCardClass(pref.degreeType)}`}
+                      style={{ padding: '18px 20px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+
+                      <div className={`num-badge ${degreeBadgeNumClass(pref.degreeType)}`} style={{ marginTop: '2px' }}>
+                        #{index + 1}
+                      </div>
+
+                      {editingId !== pref.id ? (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                                {pref.logoUrl && (
+                                  <div style={{ width: 32, height: 32, borderRadius: '8px', overflow: 'hidden', background: 'white', border: '1px solid var(--border)', flexShrink: 0 }}>
+                                    <img src={pref.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.parentElement.style.display='none'}/>
+                                  </div>
+                                )}
+                                <h4 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: '15px', color: 'var(--text)', margin: 0, lineHeight: '1.3' }}>
+                                  {pref.universityName}
+                               </h4>
+                                <span className={`rank-badge ${pref.qsRanking && pref.qsRanking !== 'N/A' ? 'rank-num' : 'rank-na'}`}>
+                                  ⭐ QS {pref.qsRanking || 'N/A'}
+                                </span>
+                                {pref.qsRanking && pref.prevRank && (
+                                  <RankGrowth current={pref.qsRanking} previous={pref.prevRank} />
+                                )}
+                                {isValidScore(pref.overallScore) && (
+                                  <span className="score-pill">◎ {parseFloat(pref.overallScore).toFixed(1)}</span>
+                                )}
+                              </div>
+
+                              <div className="program-name" style={{
+                                marginBottom: '8px',
+                                color: pref.degreeType === 'Bachelor' ? 'var(--bachelor-accent)'
+                                     : pref.degreeType === "Master's" ? 'var(--masters-accent)'
+                                     : 'var(--phd-accent)'
+                              }}>
+                                {pref.degreeType} in {pref.programName}
+                              </div>
+
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                                {(pref.cityState || pref.country) && (
+                                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', padding: '3px 10px' }}>
+                                    📍 {[pref.cityState, pref.country].filter(Boolean).join(', ')}
+                                  </span>
+                                )}
+                                <span style={{
+                                  fontSize: '11px', fontWeight: 700, borderRadius: '8px', padding: '3px 10px',
+                                  color: pref.degreeType === 'Bachelor' ? 'var(--bachelor-accent)' : pref.degreeType === "Master's" ? 'var(--masters-accent)' : 'var(--phd-accent)',
+                                  background: pref.degreeType === 'Bachelor' ? 'var(--bachelor-bg)' : pref.degreeType === "Master's" ? 'var(--masters-bg)' : 'var(--phd-bg)',
+                                  border: `1px solid ${pref.degreeType === 'Bachelor' ? 'var(--bachelor-border)' : pref.degreeType === "Master's" ? 'var(--masters-border)' : 'var(--phd-border)'}`,
+                                }}>
+                                  {pref.degreeType === 'Bachelor' ? '🎓' : pref.degreeType === "Master's" ? '📘' : '🔬'} {pref.degreeType}
+                                </span>
+                                {pref.gender && (
+                                  <span style={{
+                                    fontSize: '11px', fontWeight: 600, borderRadius: '8px', padding: '3px 10px',
+                                    color: pref.gender === 'Male' ? '#1d4ed8' : pref.gender === 'Female' ? '#be185d' : '#7c3aed',
+                                    background: pref.gender === 'Male' ? '#dbeafe' : pref.gender === 'Female' ? '#fce7f3' : '#f5f3ff',
+                                    border: `1px solid ${pref.gender === 'Male' ? '#93c5fd' : pref.gender === 'Female' ? '#f9a8d4' : '#d4caff'}`,
+                                  }}>
+                                    {pref.gender === 'Male' ? '♂ Male' : pref.gender === 'Female' ? '♀ Female' : '👥 Both'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {pref.duration && (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px 8px', fontWeight: 500 }}>
+                                    ⏱ {pref.duration}
+                                  </span>
+                                )}
+                                {pref.language && (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px 8px', fontWeight: 500 }}>
+                                    🌐 {pref.language}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="print-hidden" style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                              <div style={{ display: 'flex', gap: '5px' }}>
+                                <button className="icon-btn" onClick={() => movePreference(index, 'up')} disabled={index === 0} title="Move Up">
+                                  <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/>
+                                  </svg>
+                                </button>
+                                <button className="icon-btn" onClick={() => movePreference(index, 'down')} disabled={index === preferences.length - 1} title="Move Down">
+                                  <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/>
+                                  </svg>
+                                </button>
+                              </div>
+                              <button className="icon-btn" onClick={() => startEditing(pref)} title="Edit">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                              </button>
+                              <button className="icon-btn danger" onClick={() => setItemToDelete(pref.id)} title="Delete">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ flex: 1 }} className="fade-slide-enter">
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                            <input type="text" value={editFormData.universityName}
+                              onChange={e => setEditFormData({...editFormData, universityName: e.target.value})}
+                              className="input-field" style={{ gridColumn: '1/-1' }} placeholder="University Name"/>
+                            <input type="text" value={editFormData.programName}
+                              onChange={e => setEditFormData({...editFormData, programName: e.target.value})}
+                              className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Program Title"/>
+                            <select value={editFormData.degreeType}
+                              onChange={e => setEditFormData({...editFormData, degreeType: e.target.value, duration: DEFAULT_DURATION[e.target.value] || '4 Years'})}
+                              className="input-field">
+                              <option>Bachelor</option><option>Master's</option><option>PhD</option>
+                            </select>
+                            <input type="text" value={editFormData.qsRanking}
+                              onChange={e => setEditFormData({...editFormData, qsRanking: e.target.value})}
+                              className="input-field" placeholder="QS Rank"/>
+                            <input type="text" value={editFormData.cityState}
+                              onChange={e => setEditFormData({...editFormData, cityState: e.target.value})}
+                              className="input-field" placeholder="City/State"/>
+                            <input type="text" value={editFormData.country}
+                              onChange={e => setEditFormData({...editFormData, country: e.target.value})}
+                              className="input-field" placeholder="Country"/>
+                            <select value={editFormData.duration}
+                              onChange={e => setEditFormData({...editFormData, duration: e.target.value})}
+                              className="input-field">
+                              {(DURATION_OPTIONS[editFormData.degreeType] || DURATION_OPTIONS['Bachelor']).map(y => (
+                                <option key={y} value={y}>{y}</option>
+                              ))}
+                            </select>
+                            
+                            {editFormData.duration === 'Custom' && (
+                              <input type="text" value={editFormData.customDuration || ''}
+                                onChange={e => setEditFormData({...editFormData, customDuration: e.target.value})}
+                                className="input-field" placeholder="Custom duration (e.g. 4.5 Years)"/>
+                            )}
+
+                            <select value={editFormData.language}
+                              onChange={e => setEditFormData({...editFormData, language: e.target.value})}
+                              className="input-field">
+                              <option>English</option><option>Arabic</option>
+                              <option>Bilingual (Ar+En)</option>
+                              <option value="Others">Others…</option>
+                            </select>
+                            <select value={editFormData.gender || 'Both'}
+                              onChange={e => setEditFormData({...editFormData, gender: e.target.value})}
+                              className="input-field">
+                              <option value="Both">Both</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                            </select>
+                            {editFormData.language === 'Others' && (
+                              <input type="text" value={editFormData.customLanguage || ''}
+                                onChange={e => setEditFormData({...editFormData, customLanguage: e.target.value})}
+                                className="input-field" style={{ gridColumn: '1/-1' }} placeholder="Specify language…"/>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button onClick={() => setEditingId(null)} className="btn-ghost">Cancel</button>
+                            <button onClick={saveEdit} className="btn-primary" style={{ padding: '10px 20px', fontSize: '13px' }}>Save</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
-            <div className="dev-credit">
+            <div className="dev-credit print-hidden">
               ProgramsTracker · Developed by{' '}
               <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" rel="noopener noreferrer">RAHAT</a>
             </div>
@@ -1642,7 +1552,7 @@
             </div>
           )}
 
-          {/* custom delete confirmation modal */}
+          {/* delete single item modal */}
           {itemToDelete && (
             <div className="modal-overlay">
               <div className="modal-content" style={{ maxWidth: '360px', padding: '24px' }}>
@@ -1663,6 +1573,33 @@
                   </button>
                   <button onClick={confirmDelete} className="btn-red" style={{ flex: 1, justifyContent: 'center' }}>
                     Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* clear all items modal */}
+          {showClearAllModal && (
+            <div className="modal-overlay">
+              <div className="modal-content" style={{ maxWidth: '360px', padding: '24px' }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', color: 'var(--danger)' }}>
+                  <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                </div>
+                <h3 style={{ fontFamily: 'Bricolage Grotesque', fontWeight: 800, fontSize: '18px', marginBottom: '8px', color: 'var(--text)' }}>
+                  Clear All Programs?
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-2)', marginBottom: '24px', lineHeight: '1.5' }}>
+                  Are you sure you want to delete all programs from your list? This action cannot be undone.
+                </p>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => setShowClearAllModal(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
+                    Cancel
+                  </button>
+                  <button onClick={() => { setPreferences([]); setShowClearAllModal(false); showToast('All programs cleared.'); }} className="btn-red" style={{ flex: 1, justifyContent: 'center' }}>
+                    Clear All
                   </button>
                 </div>
               </div>
