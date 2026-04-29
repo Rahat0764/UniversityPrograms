@@ -61,7 +61,7 @@ Since this project is built as a single, powerful `index.html` file utilizing CD
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/Rahat0764/UniversityPrograms.git](https://github.com/Rahat0764/UniversityPrograms.git)
+    git clone https://github.com/Rahat0764/UniversityPrograms.git
     ```
 2.  **Navigate to the directory:**
     ```bash
